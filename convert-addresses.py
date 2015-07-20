@@ -84,7 +84,7 @@ if __name__ == '__main__':
     headeraddresses = next(addressReader, None)
     
     addressWriter = csv.writer(open('bev_addresses.csv', 'w'), delimiter=";", quotechar='"')
-    addressWriter.writerow(['Gemeinde', 'plz', 'strasse', 'nummer','x', 'y'])
+    addressWriter.writerow(['Gemeinde', 'plz', 'strasse', 'nummer','hausname','x', 'y'])
     
     # get the total file size for status output
     total_addresses = sum(1 for row in csv.reader(open('ADRESSE.csv', 'r'), delimiter=';', quotechar='"'))
