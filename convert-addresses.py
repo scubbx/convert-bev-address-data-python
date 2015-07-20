@@ -42,7 +42,24 @@ def reproject(sourceCRS, points):
     wktPoint = point.ExportToWkt()
     transformedPoint = wktPoint.split("(")[1][:-1].split(" ")
     del(point)
-    return([round(float(p),2) for p in transformedPoint])
+    return [round(float(p),2) for p in transformedPoint]
+
+def buildHausNumber(hausnrtext,hausnrzahl1,hausnrbuchstabe1,hausnrverbindung1,hausnrzahl2,hausnrbuchstabe2,hausnrbereich):
+    hausnr1 = hausnrzahl1
+    hausnr2 = hausnrzahl2
+    compiledHausNr = ""
+    if hausnrbuchstabe1 != "": hausnr1 += hausnrbuchstabe1
+    if hausnrbuchstabe2 != "": hausnr2 += hausnrbuchstabe2
+    if hausnrverbindung1 != "":
+        compiledHausNr = hausnr1 + hausnrverbindung1 + hausnr2
+    elif hausnr2 != "":
+        compiledHausNr = hausnr1 + " " + hausnr2
+    else:
+        compiledHausNr = hausnr1
+    if hausnrtext != "": compiledHausNr += " ,{}".format(hausnrtext)
+    if hausnrbereich != "keine Angabe": compiledHausNr += " ,{}".format(hausnrbereich)
+    return compiledHausNr
+    
 
 if __name__ == '__main__':
     print("buffering streets ...")
@@ -66,12 +83,20 @@ if __name__ == '__main__':
     addressWriter = csv.writer(open('bev_addresses.csv', 'w'), delimiter=";", quotechar='"')
     addressWriter.writerow(['Gemeinde', 'plz', 'strasse', 'nummer','x', 'y'])
     
+    # get the total file size for status output
+    total_addresses = sum(1 for row in csv.reader(open('ADRESSE.csv', 'r'), delimiter=';', quotechar='"'))
+    previous_percentage = 0
     # the main loop is this: each line in the ADRESSE.csv is parsed one by one
-    for addressrow in addressReader:
+    for i,addressrow in enumerate(addressReader):
+        current_percentage = round(float(i)/total_addresses * 100)
+        if current_percentage != previous_percentage:
+            print("{} %".format(current_percentage))
+            previous_percentage = current_percentage
         streetname = streets[addressrow[4]]
         districtname = districts[addressrow[1]]
         plzname = addressrow[3]
-        hausnrzahl = addressrow[7]
+        hausnr = buildHausNumber(addressrow[6],addressrow[7],addressrow[8],addressrow[9],addressrow[10],addressrow[11],addressrow[12])
+        hausname = addressrow[14]
         x = addressrow[15]
         y = addressrow[16]
         # some entries don't have coordinates: ignore these entries
@@ -80,5 +105,5 @@ if __name__ == '__main__':
         coords = reproject(usedprojection,[x,y])
         # if the reprojection returned [0,0], this indicates an error: ignore these entries
         if coords[0] == '0' or coords[1] == '0': continue
-        addressWriter.writerow([districtname, plzname, streetname, hausnrzahl, coords[0], coords[1]])
+        addressWriter.writerow([districtname, plzname, streetname, hausnr, hausname, coords[0], coords[1]])
     print("finished")
