@@ -1,0 +1,15 @@
+# Compiled python modules.
+*.pyc
+
+# Setuptools distribution folder.
+/dist/
+
+# Python egg metadata, regenerated from source files by setuptools.
+/*.egg-info
+
+# Build folder
+/Adresse_Relationale_Tabellen-Stichtagsdaten.zip
+/ADRESSE.csv
+/GEMEINDE.csv
+/STRASSE.csv
+/bev_addresses.csv
