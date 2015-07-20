@@ -45,6 +45,9 @@ def reproject(sourceCRS, points):
     return [round(float(p),2) for p in transformedPoint]
 
 def buildHausNumber(hausnrtext,hausnrzahl1,hausnrbuchstabe1,hausnrverbindung1,hausnrzahl2,hausnrbuchstabe2,hausnrbereich):
+    """This function takes all the different single parts of the input file that belong
+    to the house number and combines them into one single string"""
+    
     hausnr1 = hausnrzahl1
     hausnr2 = hausnrzahl2
     compiledHausNr = ""
