@@ -57,7 +57,7 @@ def reproject(sourceCRS, points):
     wktPoint = point.ExportToWkt()
     transformedPoint = wktPoint.split("(")[1][:-1].split(" ")
     del(point)
-    return [round(float(p),7) for p in transformedPoint]
+    return [round(float(p),6) for p in transformedPoint]
 
 def buildHausNumber(hausnrtext,hausnrzahl1,hausnrbuchstabe1,hausnrverbindung1,hausnrzahl2,hausnrbuchstabe2,hausnrbereich):
     """This function takes all the different single parts of the input file that belong
@@ -98,7 +98,8 @@ if __name__ == '__main__':
     addressReader = csv.reader(open('ADRESSE.csv', 'r'), delimiter=';', quotechar='"')
     headeraddresses = next(addressReader, None)
     
-    addressWriter = csv.writer(open('bev_addresses.csv', 'w'), delimiter=";", quotechar='"')
+    outputFilename = "bev_addressesEPSG{}.csv".format(args.epsg)
+    addressWriter = csv.writer(open(outputFilename, 'w'), delimiter=";", quotechar='"')
     addressWriter.writerow(['Gemeinde', 'plz', 'strasse', 'nummer','hausname','x', 'y'])
     
     # get the total file size for status output
