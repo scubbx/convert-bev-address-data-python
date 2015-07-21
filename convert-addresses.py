@@ -9,11 +9,26 @@ http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL
 """
 
 import csv
+import argparse
 from osgeo import osr
 from osgeo import ogr
 
+'''
+targetRefLambert = osr.SpatialReference()
+targetRefLambert.ImportFromEPSG(31287)
+targetRefWgs = osr.SpatialReference()
+targetRefWgs.ImportFromEPSG(4326)
+'''
+
+# command line arguments are evaluated
+parser = argparse.ArgumentParser(prog='python3 convert-addresses.py')
+parser.add_argument('-epsg', help='Specify the EPSG code of the coordinate system used for the results. If none is given, this value defaults to the WGS84 system.'
+                    ,type=int, default=4326, dest='epsg')
+args = parser.parse_args()
+# the target EPSG is set according to the argument
 targetRef = osr.SpatialReference()
-targetRef.ImportFromEPSG(31287)
+targetRef.ImportFromEPSG(args.epsg)
+
 westRef = osr.SpatialReference()
 westRef.ImportFromEPSG(31254)
 centerRef = osr.SpatialReference()
@@ -42,7 +57,7 @@ def reproject(sourceCRS, points):
     wktPoint = point.ExportToWkt()
     transformedPoint = wktPoint.split("(")[1][:-1].split(" ")
     del(point)
-    return [round(float(p),2) for p in transformedPoint]
+    return [round(float(p),6) for p in transformedPoint]
 
 def buildHausNumber(hausnrtext,hausnrzahl1,hausnrbuchstabe1,hausnrverbindung1,hausnrzahl2,hausnrbuchstabe2,hausnrbereich):
     """This function takes all the different single parts of the input file that belong
