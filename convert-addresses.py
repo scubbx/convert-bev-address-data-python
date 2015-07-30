@@ -112,6 +112,7 @@ if __name__ == '__main__':
             print("{} %".format(current_percentage))
             previous_percentage = current_percentage
         streetname = streets[addressrow[4]]
+        streetname = streetname.strip() # remove the trailing whitespace after each street name
         districtname = districts[addressrow[1]]
         plzname = addressrow[3]
         hausnr = buildHausNumber(addressrow[6],addressrow[7],addressrow[8],addressrow[9],addressrow[10],addressrow[11],addressrow[12])
