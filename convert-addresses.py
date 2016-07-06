@@ -24,6 +24,7 @@ targetRefWgs.ImportFromEPSG(4326)
 parser = argparse.ArgumentParser(prog='python3 convert-addresses.py')
 parser.add_argument('-epsg', help='Specify the EPSG code of the coordinate system used for the results. If none is given, this value defaults to the WGS84 system.'
                     ,type=int, default=4326, dest='epsg')
+parser.add_argument('-gkz', help='Specify if GKZ should be included or not.', action='store_true', dest='gkz')
 args = parser.parse_args()
 # the target EPSG is set according to the argument
 targetRef = osr.SpatialReference()
@@ -100,7 +101,10 @@ if __name__ == '__main__':
     
     outputFilename = "bev_addressesEPSG{}.csv".format(args.epsg)
     addressWriter = csv.writer(open(outputFilename, 'w'), delimiter=";", quotechar='"')
-    addressWriter.writerow(['Gemeinde', 'plz', 'strasse', 'nummer','hausname','x', 'y'])
+    row = ['Gemeinde', 'plz', 'strasse', 'nummer','hausname','x', 'y']
+    if args.gkz:
+        row.append('gkz')
+    addressWriter.writerow(row)
     
     # get the total file size for status output
     total_addresses = sum(1 for row in csv.reader(open('ADRESSE.csv', 'r'), delimiter=';', quotechar='"'))
@@ -114,6 +118,7 @@ if __name__ == '__main__':
         streetname = streets[addressrow[4]]
         streetname = streetname.strip() # remove the trailing whitespace after each street name
         districtname = districts[addressrow[1]]
+        gkz = addressrow[1]
         plzname = addressrow[3]
         hausnr = buildHausNumber(addressrow[6],addressrow[7],addressrow[8],addressrow[9],addressrow[10],addressrow[11],addressrow[12])
         hausname = addressrow[14]
@@ -125,5 +130,8 @@ if __name__ == '__main__':
         coords = reproject(usedprojection,[x,y])
         # if the reprojection returned [0,0], this indicates an error: ignore these entries
         if coords[0] == '0' or coords[1] == '0': continue
-        addressWriter.writerow([districtname, plzname, streetname, hausnr, hausname, coords[0], coords[1]])
+        row = [districtname, plzname, streetname, hausnr, hausname, coords[0], coords[1]]
+        if args.gkz:
+            row.append(gkz)
+        addressWriter.writerow(row)
     print("finished")
