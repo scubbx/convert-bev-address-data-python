@@ -9,3 +9,7 @@ The gdal Python-Module needs to be installed to perform reprojection.
 
 The main difference to the original is that you do not need to specify an input file name. Just execute the script from within the unzipped data from the BEV.
 The coordinate system of the output file is the WGS84 system by default, but can be specified manually by the -epsg parameter. To produce an output in the Austrian Lambert system, the program call would look like this: `python3 convert-addresses.py -epsg 31287`
+
+## License
+
+See https://github.com/scubbx/convert-bev-address-data-python/blob/master/license .
