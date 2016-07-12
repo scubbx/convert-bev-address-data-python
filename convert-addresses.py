@@ -88,7 +88,8 @@ if __name__ == '__main__':
     try:
         streetReader = csv.reader(open('STRASSE.csv', 'r'), delimiter=';', quotechar='"')
     except IOError:
-        print("The file 'STRASSE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
+        print("\n##### ERROR ##### \nThe file 'STRASSE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
+        quit()
 
     streets = {}
     headerstreets = next(streetReader, None)
@@ -96,14 +97,24 @@ if __name__ == '__main__':
         streets[streetrow[0]] = streetrow[1] + " " + streetrow[2]
 
     print("buffering districts ...")
-    districtReader = csv.reader(open('GEMEINDE.csv', 'r'), delimiter=';', quotechar='"')
+    try:
+        districtReader = csv.reader(open('GEMEINDE.csv', 'r'), delimiter=';', quotechar='"')
+    except IOError:
+        print("\n##### ERROR ##### \nThe file 'GEMEINDE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
+        quit()
+        
     districts = {}
     headerdistricts = next(districtReader, None)
     for districtrow in districtReader:
         districts[districtrow[0]] = districtrow[1]
 
     print("processing addresses ...")
-    addressReader = csv.reader(open('ADRESSE.csv', 'r'), delimiter=';', quotechar='"')
+    try:
+        addressReader = csv.reader(open('ADRESSE.csv', 'r'), delimiter=';', quotechar='"')
+    except IOError:
+        print("\n##### ERROR ##### \nThe file 'ADRESSE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
+        quit()
+
     headeraddresses = next(addressReader, None)
 
     outputFilename = "bev_addressesEPSG{}.csv".format(args.epsg)
@@ -118,10 +129,10 @@ if __name__ == '__main__':
     previous_percentage = 0
     # the main loop is this: each line in the ADRESSE.csv is parsed one by one
     for i, addressrow in enumerate(addressReader):
-        current_percentage = round(float(i) / total_addresses * 100,1)
+        current_percentage = round(float(i) / total_addresses * 100,2)
         if current_percentage != previous_percentage:
             # we draw a nice progess bar
-            sys.stdout.write("\r{} %   ".format(current_percentage))
+            sys.stdout.write("\r{} %   ".format(str(current_percentage).ljust(6)))
             sys.stdout.write('[{}]'.format(('#' * (int(current_percentage) / 2)).ljust(50)))
             sys.stdout.flush()
             previous_percentage = current_percentage
@@ -146,4 +157,4 @@ if __name__ == '__main__':
         if args.gkz:
             row.append(gkz)
         addressWriter.writerow(row)
-    print("finished")
+    print("\nfinished")
