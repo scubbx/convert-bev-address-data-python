@@ -5,6 +5,7 @@ python:
 sudo: false
 
 install:
+ - apt-get install python-dev
  - pip install gdal argparse
 
 script:
