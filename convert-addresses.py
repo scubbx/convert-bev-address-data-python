@@ -7,12 +7,16 @@ The input are the files STRASSE.csv, GEMEINDE.csv and ADRESSE.csv from the
 publicly available dataset of addresses of Austria, available for download at
 http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL
 
+This script will attempt to download the data necessary automatically.
 The output will be named "bev_addressesEPSGxxxx.csv".
 """
 
 import sys
 import csv
 import argparse
+import requests
+import os.path
+import zipfile
 from osgeo import osr
 from osgeo import ogr
 
@@ -37,6 +41,29 @@ eastRef.ImportFromEPSG(31256)
 westTransform = osr.CoordinateTransformation(westRef, targetRef)
 centralTransform = osr.CoordinateTransformation(centerRef, targetRef)
 eastTransfrom = osr.CoordinateTransformation(eastRef, targetRef)
+
+
+def downloadData():
+    """This function downloads the address data from BEV and displays its terms
+    of usage"""
+
+    addressdataUrl = "http://www.bev.gv.at/pls/portal/docs/PAGE/BEV_PORTAL_CONTENT_ALLGEMEIN/0200_PRODUKTE/UNENTGELTLICHE_PRODUKTE_DES_BEV/Adresse_Relationale_Tabellen-Stichtagsdaten.zip"
+    response = requests.get(addressdataUrl, stream=True)
+    print("downloading address data from BEV")
+    
+    with open(addressdataUrl.split('/')[-1], 'wb') as handle:
+        for i, data in enumerate(response.iter_content(chunk_size=1000000)):
+            handle.write(data)
+            # we draw a nice progess bar
+            current_percentage = i * 1.3
+            sys.stdout.write("\r{} %   ".format(str(current_percentage).ljust(6)))
+            sys.stdout.write('[{}]'.format(('#' * (int(current_percentage) / 2)).ljust(50)))
+            sys.stdout.flush()
+            #print("{} %".format(i))
+    current_percentage = 100
+    sys.stdout.write("\r{} %   ".format(str(current_percentage).ljust(6)))
+    sys.stdout.write('[{}]'.format(('#' * (int(current_percentage) / 2)).ljust(50)))
+    sys.stdout.flush()
 
 
 def reproject(sourceCRS, points):
@@ -80,10 +107,32 @@ def buildHausNumber(hausnrtext, hausnrzahl1, hausnrbuchstabe1, hausnrverbindung1
     return compiledHausNr
 
 
+def preparations():
+    """check for necessary files and issue downloads when necessary"""
+
+    if not (os.path.isfile('STRASSE.csv') and os.path.isfile('GEMEINDE.csv') and os.path.isfile('ADRESSE.csv')):
+        # ckeck if the packed version exists
+        if not os.path.isfile('Adresse_Relationale_Tabellen-Stichtagsdaten.zip'):
+            # if not, download it
+            downloadData()
+        with zipfile.ZipFile('Adresse_Relationale_Tabellen-Stichtagsdaten.zip', 'r') as myzip:
+            print("extracting STRASSE.csv")
+            myzip.extract('STRASSE.csv');
+            print("extracting GEMEINDE.csv")
+            myzip.extract('GEMEINDE.csv');
+            print("extracting ADRESSE.csv")
+            myzip.extract('ADRESSE.csv');
+    return True
+
 if __name__ == '__main__':
     print('#' * 40)
     print(info)
     print('#' * 40 + '\n')
+    
+    if not preparations() == True:
+        print("There was an error")
+        quit()
+    
     print("buffering streets ...")
     try:
         streetReader = csv.reader(open('STRASSE.csv', 'r'), delimiter=';', quotechar='"')
