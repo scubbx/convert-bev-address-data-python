@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 
-"""The idea for this script originates from
+info = """The idea for this script originates from
 https://github.com/BergWerkGIS/convert-bev-address-data/blob/master/README.md
 
 The input are the files STRASSE.csv, GEMEINDE.csv and ADRESSE.csv from the
 publicly available dataset of addresses of Austria, available for download at
 http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL
+
+The output will be named "bev_addressesEPSGxxxx.csv".
 """
 
 import sys
@@ -16,14 +18,10 @@ from osgeo import ogr
 
 # command line arguments are evaluated
 parser = argparse.ArgumentParser(prog='python3 convert-addresses.py')
-parser.add_argument('-epsg',
-                    help='Specify the EPSG code of the coordinate  system used'
-                         ' for the results. If none is given, this value'
-                         ' defaults to WGS84',
-                    type=int, default=4326, dest='epsg')
-parser.add_argument('-gkz',
-                    help='Specify if GKZ should be included or not.',
-                    action='store_true', dest='gkz')
+parser.add_argument('-epsg', type=int, default=4326, dest='epsg',
+                    help='Specify the EPSG code of the coordinate  system used for the results. If none is given, this value defaults to WGS84')
+parser.add_argument('-gkz', action='store_true', dest='gkz',
+                    help='Specify if GKZ should be included or not.')
 args = parser.parse_args()
 # the target EPSG is set according to the argument
 targetRef = osr.SpatialReference()
@@ -46,8 +44,7 @@ def reproject(sourceCRS, points):
     depending on their original CRS given by the parameter sourceCRS"""
 
     #point = ogr.CreateGeometryFromWkt("POINT (" + str(points[0]) + " " + str(points[1]) + ")")
-    point = ogr.CreateGeometryFromWkt("POINT ({} {})".format(points[0],
-                                                             points[1]))
+    point = ogr.CreateGeometryFromWkt("POINT ({} {})".format(points[0], points[1]))
     if sourceCRS == '31254':
         point.Transform(westTransform)
     elif sourceCRS == '31255':
@@ -84,6 +81,9 @@ def buildHausNumber(hausnrtext, hausnrzahl1, hausnrbuchstabe1, hausnrverbindung1
 
 
 if __name__ == '__main__':
+    print('#' * 40)
+    print(info)
+    print('#' * 40 + '\n')
     print("buffering streets ...")
     try:
         streetReader = csv.reader(open('STRASSE.csv', 'r'), delimiter=';', quotechar='"')
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     except IOError:
         print("\n##### ERROR ##### \nThe file 'GEMEINDE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
         quit()
-        
+
     districts = {}
     headerdistricts = next(districtReader, None)
     for districtrow in districtReader:
@@ -129,7 +129,7 @@ if __name__ == '__main__':
     previous_percentage = 0
     # the main loop is this: each line in the ADRESSE.csv is parsed one by one
     for i, addressrow in enumerate(addressReader):
-        current_percentage = round(float(i) / total_addresses * 100,2)
+        current_percentage = round(float(i) / total_addresses * 100, 2)
         if current_percentage != previous_percentage:
             # we draw a nice progess bar
             sys.stdout.write("\r{} %   ".format(str(current_percentage).ljust(6)))
