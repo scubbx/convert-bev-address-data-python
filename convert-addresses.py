@@ -8,6 +8,7 @@ publicly available dataset of addresses of Austria, available for download at
 http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL
 """
 
+import sys
 import csv
 import argparse
 from osgeo import osr
@@ -84,7 +85,10 @@ def buildHausNumber(hausnrtext, hausnrzahl1, hausnrbuchstabe1, hausnrverbindung1
 
 if __name__ == '__main__':
     print("buffering streets ...")
-    streetReader = csv.reader(open('STRASSE.csv', 'r'), delimiter=';', quotechar='"')
+    try:
+        streetReader = csv.reader(open('STRASSE.csv', 'r'), delimiter=';', quotechar='"')
+    except IOError:
+        print("The file 'STRASSE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
 
     streets = {}
     headerstreets = next(streetReader, None)
@@ -114,9 +118,12 @@ if __name__ == '__main__':
     previous_percentage = 0
     # the main loop is this: each line in the ADRESSE.csv is parsed one by one
     for i, addressrow in enumerate(addressReader):
-        current_percentage = round(float(i) / total_addresses * 100)
+        current_percentage = round(float(i) / total_addresses * 100,1)
         if current_percentage != previous_percentage:
-            print("{} %".format(current_percentage))
+            # we draw a nice progess bar
+            sys.stdout.write("\r{} %   ".format(current_percentage))
+            sys.stdout.write('[{}]'.format(('#' * (int(current_percentage) / 2)).ljust(50)))
+            sys.stdout.flush()
             previous_percentage = current_percentage
         streetname = streets[addressrow[4]]
         streetname = streetname.strip()  # remove the trailing whitespace after each street name
