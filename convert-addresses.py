@@ -11,42 +11,82 @@ This script will attempt to download the data necessary automatically.
 The output will be named "bev_addressesEPSGxxxx.csv".
 """
 
+requestsModule = False
+osgeoModule = False
+pyprojModule = False
+arcpyModule = False
+
 import sys
 import csv
 import argparse
-import requests
+try:
+    import requests
+    requestsModule = True
+except ImportError:
+    print("- no module named requests, automatic download of data is deactivated\n")
 import os.path
 import zipfile
-from osgeo import osr
-from osgeo import ogr
+try:
+    from osgeo import osr
+    from osgeo import ogr
+    osgeoModule = True
+except ImportError:
+    print("- no osgeo module for coordinate transformation found, trying to load pyproj module instead ...")
+    try:
+        import pyproj
+        arcpyModule = True
+    except ImportError:
+        print("- no osgeo module for coordinate transformation found, trying to load ArcPy module instead ...")
+        try:
+            import arcpy
+            arcpyModule = True
+        except ImportError:
+            print("- No pyproj module is present. Coordinate transformation requires either the free OsGeo module or ArcGis >= 10 to be installed.")
+            print("quitting.")
+            quit()
 
 # command line arguments are evaluated
 parser = argparse.ArgumentParser(prog='python3 convert-addresses.py')
-parser.add_argument('-epsg', type=int, default=4326, dest='epsg',
-                    help='Specify the EPSG code of the coordinate  system used for the results. If none is given, this value defaults to WGS84')
+parser.add_argument('-epsg', type=int, default=3035, dest='epsg',
+                    help='Specify the EPSG code of the coordinate  system used for the results. If none is given, this value defaults to EPSG:3035')
 parser.add_argument('-gkz', action='store_true', dest='gkz',
                     help='Specify if GKZ should be included or not.')
 args = parser.parse_args()
+
 # the target EPSG is set according to the argument
-targetRef = osr.SpatialReference()
-targetRef.ImportFromEPSG(args.epsg)
 
-westRef = osr.SpatialReference()
-westRef.ImportFromEPSG(31254)
-centerRef = osr.SpatialReference()
-centerRef.ImportFromEPSG(31255)
-eastRef = osr.SpatialReference()
-eastRef.ImportFromEPSG(31256)
+if not arcpyModule:
+    # for OsGeo
+    targetRef = osr.SpatialReference()
+    targetRef.ImportFromEPSG(args.epsg)
 
-westTransform = osr.CoordinateTransformation(westRef, targetRef)
-centralTransform = osr.CoordinateTransformation(centerRef, targetRef)
-eastTransfrom = osr.CoordinateTransformation(eastRef, targetRef)
+    westRef = osr.SpatialReference()
+    westRef.ImportFromEPSG(31254)
+    centerRef = osr.SpatialReference()
+    centerRef.ImportFromEPSG(31255)
+    eastRef = osr.SpatialReference()
+    eastRef.ImportFromEPSG(31256)
+
+    westTransform = osr.CoordinateTransformation(westRef, targetRef)
+    centralTransform = osr.CoordinateTransformation(centerRef, targetRef)
+    eastTransfrom = osr.CoordinateTransformation(eastRef, targetRef)
+
+else:
+    # for ArcPy
+    arcTargetRef = arcpy.SpatialReference(args.epsg)
+
+    arcWestRef = arcpy.SpatialReference(31254)
+    arcCenterRef = arcpy.SpatialReference(31255)
+    arcEastRef = arcpy.SpatialReference(31256)
 
 
 def downloadData():
     """This function downloads the address data from BEV and displays its terms
     of usage"""
 
+    if not requestsModule:
+        print("source data missing and download is deactivated")
+        quit()
     addressdataUrl = "http://www.bev.gv.at/pls/portal/docs/PAGE/BEV_PORTAL_CONTENT_ALLGEMEIN/0200_PRODUKTE/UNENTGELTLICHE_PRODUKTE_DES_BEV/Adresse_Relationale_Tabellen-Stichtagsdaten.zip"
     response = requests.get(addressdataUrl, stream=True)
     print("downloading address data from BEV")
@@ -66,26 +106,56 @@ def downloadData():
     sys.stdout.flush()
 
 
-def reproject(sourceCRS, points):
-    """This function reprojects an array of coordinates (a point) to EPSG:31287
+def reproject(sourceCRS, point):
+    """This function reprojects an array of coordinates (a point) to the desired CRS
     depending on their original CRS given by the parameter sourceCRS"""
 
-    #point = ogr.CreateGeometryFromWkt("POINT (" + str(points[0]) + " " + str(points[1]) + ")")
-    point = ogr.CreateGeometryFromWkt("POINT ({} {})".format(points[0], points[1]))
-    if sourceCRS == '31254':
-        point.Transform(westTransform)
-    elif sourceCRS == '31255':
-        point.Transform(centralTransform)
-    elif sourceCRS == '31256':
-        point.Transform(eastTransfrom)
+    if not arcpyModule:
+        # if using OsGeo
+        #point = ogr.CreateGeometryFromWkt("POINT (" + str(point[0]) + " " + str(point[1]) + ")")
+        point = ogr.CreateGeometryFromWkt("POINT ({} {})".format(point[0], point[1]))
+        if sourceCRS == '31254':
+            point.Transform(westTransform)
+        elif sourceCRS == '31255':
+            point.Transform(centralTransform)
+        elif sourceCRS == '31256':
+            point.Transform(eastTransfrom)
+        else:
+            print("unkown CRS: {}".format(sourceCRS))
+            return([0, 0])
+        wktPoint = point.ExportToWkt()
+        transformedPoint = wktPoint.split("(")[1][:-1].split(" ")
+        del(point)
+    
+    elif pyprojModule:
+        # use pyproj
+        print("coordinate transformation with pyproj is not yet implemented")
+        quit()
+        
     else:
-        print("unkown CRS: {}".format(sourceCRS))
-        return([0, 0])
-    wktPoint = point.ExportToWkt()
-    transformedPoint = wktPoint.split("(")[1][:-1].split(" ")
-    del(point)
-    return [round(float(p), 6) for p in transformedPoint]
+        # if using ArcPy
+        point = [float(x) for x in point]
+        arcPoint = arcpy.Point(point[0],point[1])
+        if sourceCRS == '31254':
+            arcPointSourceCRS = arcpy.SpatialReference(31254)
+        elif sourceCRS == '31255':
+            arcPointSourceCRS = arcpy.SpatialReference(31255)
+        elif sourceCRS == '31256':
+            arcPointSourceCRS = arcpy.SpatialReference(31256)
+        else:
+            print("unkown CRS: {}".format(sourceCRS))
+            return([0, 0])
+        arcPointGeo = arcpy.PointGeometry(arcPoint, arcPointSourceCRS)
+        arcPointTargetGeo = arcPointGeo.projectAs(arcTargetRef)
+        arcTargetPoint = arcPointTargetGeo.lastPoint
+        transformedPoint = [arcTargetPoint.X, arcTargetPoint.Y]
+        del(arcPointGeo)
+        del(arcPointTargetGeo)
+        del(arcTargetPoint)
+        del(arcPoint)
 
+    return [round(float(p), 6) for p in transformedPoint]
+        
 
 def buildHausNumber(hausnrtext, hausnrzahl1, hausnrbuchstabe1, hausnrverbindung1, hausnrzahl2, hausnrbuchstabe2, hausnrbereich):
     """This function takes all the different single parts of the input file
