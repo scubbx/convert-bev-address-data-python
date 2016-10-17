@@ -16,6 +16,8 @@ osgeoModule = False
 pyprojModule = False
 arcpyModule = False
 
+import time
+print( time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()) )
 import sys
 import csv
 import argparse
@@ -277,3 +279,4 @@ if __name__ == '__main__':
             row.append(gkz)
         addressWriter.writerow(row)
     print("\nfinished")
+    print( time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()) )
