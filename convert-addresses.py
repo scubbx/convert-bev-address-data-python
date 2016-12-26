@@ -99,7 +99,7 @@ def downloadData():
             # we draw a nice progess bar
             current_percentage = i * 1.3
             sys.stdout.write("\r{} %   ".format(str(current_percentage).ljust(6)))
-            sys.stdout.write('[{}]'.format(('#' * (int(current_percentage) / 2)).ljust(50)))
+            sys.stdout.write('[{}]'.format(('#' * int(current_percentage / 2)).ljust(50)))
             sys.stdout.flush()
             #print("{} %".format(i))
     current_percentage = 100
