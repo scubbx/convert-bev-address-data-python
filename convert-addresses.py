@@ -254,7 +254,7 @@ if __name__ == '__main__':
         if current_percentage != previous_percentage:
             # we draw a nice progess bar
             sys.stdout.write("\r{} %   ".format(str(current_percentage).ljust(6)))
-            sys.stdout.write('[{}]'.format(('#' * (int(current_percentage) / 2)).ljust(50)))
+            sys.stdout.write('[{}]'.format(('#' * int(current_percentage / 2) ).ljust(50)))
             sys.stdout.flush()
             previous_percentage = current_percentage
         streetname = streets[addressrow[4]]
