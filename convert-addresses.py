@@ -104,7 +104,7 @@ def downloadData():
             #print("{} %".format(i))
     current_percentage = 100
     sys.stdout.write("\r{} %   ".format(str(current_percentage).ljust(6)))
-    sys.stdout.write('[{}]'.format(('#' * (int(current_percentage) / 2)).ljust(50)))
+    sys.stdout.write('[{}]'.format(('#' * int(current_percentage / 2)).ljust(50)))
     sys.stdout.flush()
 
 
