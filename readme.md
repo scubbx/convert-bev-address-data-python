@@ -3,7 +3,7 @@ The idea for this script is shamelessly copied from https://github.com/BergWerkG
 ## Why?
 
 The original script only runs on Windows systems. This one performs the same task as the original, but relies on Python.
-The gdal Python-Module needs to be installed to perform reprojection.
+The gdal Python-Module or ArcPy (much, much slower!) needs to be installed to perform reprojection.
 
 ## Usage
 
