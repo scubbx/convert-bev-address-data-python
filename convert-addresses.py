@@ -38,12 +38,12 @@ except ImportError:
         import pyproj
         arcpyModule = True
     except ImportError:
-        print("- no osgeo module for coordinate transformation found, trying to load ArcPy module instead ...")
+        print("- no pyproj module for coordinate transformation found, trying to load ArcPy module instead ...")
         try:
             import arcpy
             arcpyModule = True
         except ImportError:
-            print("- No pyproj module is present. Coordinate transformation requires either the free OsGeo module or ArcGis >= 10 to be installed.")
+            print("- No arcpy module is present. Coordinate transformation requires either the free OsGeo module or ArcGis >= 10 to be installed.")
             print("quitting.")
             quit()
 
