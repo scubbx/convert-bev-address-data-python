@@ -11,7 +11,7 @@ The main difference to the original is that you do not need to specify an input 
 
 ### Command Line Arguments
 
-* The coordinate system of the output file is the WGS84 system by default, but can be specified manually by the -epsg parameter. To produce an output in the Austrian Lambert system, the program call would look like this: `python3 convert-addresses.py -epsg 31287`
+* The default coordinate system of the output file is EPSG:3035 (http://spatialreference.org/ref/epsg/etrs89-etrs-laea/), one of the European coordinate systems used by INSPIRE (http://inspire.ec.europa.eu) , by default, but can be specified manually by the -epsg parameter. To produce an output in the Austrian Lambert system, the program call would look like this: `python3 convert-addresses.py -epsg 31287` . To produce an output in the WGS84 system, the call has to be performed like this: `python3 convert-addresses.py -epsg 4326`
 
 * To include the GKZ, use the -gkz parameter 
 
