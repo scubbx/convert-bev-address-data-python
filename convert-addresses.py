@@ -53,6 +53,8 @@ parser.add_argument('-epsg', type=int, default=3035, dest='epsg',
                     help='Specify the EPSG code of the coordinate  system used for the results. If none is given, this value defaults to EPSG:3035')
 parser.add_argument('-gkz', action='store_true', dest='gkz',
                     help='Specify if GKZ should be included or not.')
+parser.add_argument('-sort', default=None, dest='sort',
+                    help='Specify if and by which field the output should be sorted (possible values: gemeinde, plz, strasse, nummer, hausname, x, y, gkz).')
 args = parser.parse_args()
 
 # the target EPSG is set according to the argument
@@ -204,6 +206,13 @@ if __name__ == '__main__':
     if not preparations() == True:
         print("There was an error")
         quit()
+
+    if args.sort != None:
+        possibleValues = ['gemeinde', 'plz', 'strasse', 'nummer', 'hausname', 'x', 'y', 'gkz']
+        if args.sort not in possibleValues:
+            print("\n##### ERROR ##### \nSort parameter is not allowed. Use one of gemeinde, plz, strasse, nummer, hausname, x, y, gkz")
+            quit()
+        args.sort = possibleValues.index(args.sort)
     
     print("buffering streets ...")
     try:
@@ -240,7 +249,7 @@ if __name__ == '__main__':
 
     outputFilename = "bev_addressesEPSG{}.csv".format(args.epsg)
     addressWriter = csv.writer(open(outputFilename, 'w'), delimiter=";", quotechar='"')
-    row = ['Gemeinde', 'plz', 'strasse', 'nummer', 'hausname', 'x', 'y']
+    row = ['gemeinde', 'plz', 'strasse', 'nummer', 'hausname', 'x', 'y']
     if args.gkz:
         row.append('gkz')
     addressWriter.writerow(row)
@@ -248,6 +257,7 @@ if __name__ == '__main__':
     # get the total file size for status output
     total_addresses = sum(1 for row in csv.reader(open('ADRESSE.csv', 'r'), delimiter=';', quotechar='"'))
     previous_percentage = 0
+    addresses = []
     # the main loop is this: each line in the ADRESSE.csv is parsed one by one
     for i, addressrow in enumerate(addressReader):
         current_percentage = round(float(i) / total_addresses * 100, 2)
@@ -275,8 +285,29 @@ if __name__ == '__main__':
         if coords[0] == '0' or coords[1] == '0':
             continue
         row = [districtname, plzname, streetname, hausnr, hausname, coords[0], coords[1]]
-        if args.gkz:
+        if args.gkz or args.sort != None:
             row.append(gkz)
-        addressWriter.writerow(row)
+        if args.sort != None:
+            addresses.append(row)
+        else:
+            addressWriter.writerow(row)
+
+    if args.sort != None:
+        print("\nsorting output ...")
+        previous_percentage = 0
+        sortedAddresses = sorted(addresses, key=lambda var: var[args.sort])
+        print("writing output ...")
+        for i, row in enumerate(sortedAddresses):
+            current_percentage = round(float(i) / len(sortedAddresses) * 100, 2)
+            if current_percentage != previous_percentage:
+                # we draw a nice progess bar
+                sys.stdout.write("\r{} %   ".format(str(current_percentage).ljust(6)))
+                sys.stdout.write('[{}]'.format(('#' * int(current_percentage / 2) ).ljust(50)))
+                sys.stdout.flush()
+                previous_percentage = current_percentage
+            if not args.gkz:
+                del row[7]
+            addressWriter.writerow(row)
+
     print("\nfinished")
     print( time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()) )
