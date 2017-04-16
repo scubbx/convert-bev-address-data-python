@@ -176,8 +176,8 @@ def buildHausNumber(hausnrtext, hausnrzahl1, hausnrbuchstabe1, hausnrverbindung1
         compiledHausNr = hausnr1 + " " + hausnr2
     else:
         compiledHausNr = hausnr1
-    if hausnrtext != "": compiledHausNr += " ,{}".format(hausnrtext)
-    if hausnrbereich != "keine Angabe": compiledHausNr += " ,{}".format(hausnrbereich)
+    if hausnrtext != "": compiledHausNr += ", {}".format(hausnrtext)
+    if hausnrbereich != "keine Angabe": compiledHausNr += ", {}".format(hausnrbereich)
     return compiledHausNr
 
 
@@ -213,7 +213,7 @@ if __name__ == '__main__':
             print("\n##### ERROR ##### \nSort parameter is not allowed. Use one of gemeinde, plz, strasse, nummer, hausname, x, y, gkz")
             quit()
         args.sort = possibleValues.index(args.sort)
-    
+
     print("buffering streets ...")
     try:
         streetReader = csv.reader(open('STRASSE.csv', 'r'), delimiter=';', quotechar='"')
