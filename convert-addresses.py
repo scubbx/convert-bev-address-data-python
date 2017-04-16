@@ -239,7 +239,7 @@ if __name__ == '__main__':
     streets = {}
     headerstreets = next(streetReader, None)
     for streetrow in streetReader:
-        streets[streetrow[0]] = streetrow[1] + " " + streetrow[2]
+        streets[streetrow[0]] = [streetrow[1], streetrow[2]]
 
     print("buffering districts ...")
     try:
@@ -264,7 +264,7 @@ if __name__ == '__main__':
 
     outputFilename = "bev_addressesEPSG{}.csv".format(args.epsg)
     addressWriter = csv.writer(open(outputFilename, 'w'), delimiter=";", quotechar='"')
-    row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'nummer', 'hausname', 'x', 'y']
+    row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'strassenzusatz', 'nummer', 'hausname', 'x', 'y']
     if args.gkz:
         row.append('gkz')
     addressWriter.writerow(row)
@@ -282,8 +282,11 @@ if __name__ == '__main__':
             sys.stdout.write('[{}]'.format(('#' * int(current_percentage / 2) ).ljust(50)))
             sys.stdout.flush()
             previous_percentage = current_percentage
-        streetname = streets[addressrow[4]]
+
+        streetname = streets[addressrow[4]][0]
+        streetsupplement = streets[addressrow[4]][1]
         streetname = streetname.strip()  # remove the trailing whitespace after each street name
+
         districtname = districts[addressrow[1]]
         gkz = addressrow[1]
 
@@ -291,10 +294,14 @@ if __name__ == '__main__':
         localityname = localities[okz]
 
         plzname = addressrow[3]
+
         hausnr = buildHausNumber(addressrow[6], addressrow[7], addressrow[8], addressrow[9], addressrow[10], addressrow[11], addressrow[12])
+
         hausname = addressrow[14]
+
         x = addressrow[15]
         y = addressrow[16]
+        
         # some entries don't have coordinates: ignore these entries
         if x == '' or y == '':
             continue
@@ -303,7 +310,7 @@ if __name__ == '__main__':
         # if the reprojection returned [0,0], this indicates an error: ignore these entries
         if coords[0] == '0' or coords[1] == '0':
             continue
-        row = [districtname, localityname, plzname, streetname, hausnr, hausname, coords[0], coords[1]]
+        row = [districtname, localityname, plzname, streetname, streetsupplement, hausnr, hausname, coords[0], coords[1]]
         if args.gkz or args.sort != None:
             row.append(gkz)
         if args.sort != None:
