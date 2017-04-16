@@ -161,7 +161,7 @@ def reproject(sourceCRS, point):
     return [round(float(p), 6) for p in transformedPoint]
         
 
-def buildHausNumber(hausnrtext, hausnrzahl1, hausnrbuchstabe1, hausnrverbindung1, hausnrzahl2, hausnrbuchstabe2, hausnrbereich):
+def buildHausNumber(hausnrzahl1, hausnrbuchstabe1, hausnrverbindung1, hausnrzahl2, hausnrbuchstabe2, hausnrbereich):
     """This function takes all the different single parts of the input file
     that belong to the house number and combines them into one single string"""
 
@@ -176,7 +176,6 @@ def buildHausNumber(hausnrtext, hausnrzahl1, hausnrbuchstabe1, hausnrverbindung1
         compiledHausNr = hausnr1 + " " + hausnr2
     else:
         compiledHausNr = hausnr1
-    if hausnrtext != "": compiledHausNr += ", {}".format(hausnrtext)
     if hausnrbereich != "keine Angabe": compiledHausNr += ", {}".format(hausnrbereich)
     return compiledHausNr
 
@@ -264,7 +263,7 @@ if __name__ == '__main__':
 
     outputFilename = "bev_addressesEPSG{}.csv".format(args.epsg)
     addressWriter = csv.writer(open(outputFilename, 'w'), delimiter=";", quotechar='"')
-    row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'strassenzusatz', 'nummer', 'hausname', 'x', 'y']
+    row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'strassenzusatz', 'hausnrtext', 'hausnummer', 'hausname', 'x', 'y']
     if args.gkz:
         row.append('gkz')
     addressWriter.writerow(row)
@@ -295,13 +294,13 @@ if __name__ == '__main__':
 
         plzname = addressrow[3]
 
-        hausnr = buildHausNumber(addressrow[6], addressrow[7], addressrow[8], addressrow[9], addressrow[10], addressrow[11], addressrow[12])
+        hausnrtext = addressrow[6]
+        hausnr = buildHausNumber(addressrow[7], addressrow[8], addressrow[9], addressrow[10], addressrow[11], addressrow[12])
 
         hausname = addressrow[14]
 
         x = addressrow[15]
         y = addressrow[16]
-        
         # some entries don't have coordinates: ignore these entries
         if x == '' or y == '':
             continue
@@ -310,7 +309,7 @@ if __name__ == '__main__':
         # if the reprojection returned [0,0], this indicates an error: ignore these entries
         if coords[0] == '0' or coords[1] == '0':
             continue
-        row = [districtname, localityname, plzname, streetname, streetsupplement, hausnr, hausname, coords[0], coords[1]]
+        row = [districtname, localityname, plzname, streetname, streetsupplement, hausnrtext, hausnr, hausname, coords[0], coords[1]]
         if args.gkz or args.sort != None:
             row.append(gkz)
         if args.sort != None:
