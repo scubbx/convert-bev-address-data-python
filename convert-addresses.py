@@ -194,6 +194,8 @@ def preparations():
             myzip.extract('STRASSE.csv');
             print("extracting GEMEINDE.csv")
             myzip.extract('GEMEINDE.csv');
+            print("extracting ORTSCHAFT.csv")
+            myzip.extract('ORTSCHAFT.csv');
             print("extracting ADRESSE.csv")
             myzip.extract('ADRESSE.csv');
     return True
@@ -213,6 +215,19 @@ if __name__ == '__main__':
             print("\n##### ERROR ##### \nSort parameter is not allowed. Use one of gemeinde, plz, strasse, nummer, hausname, x, y, gkz")
             quit()
         args.sort = possibleValues.index(args.sort)
+
+    print("buffering localities ...")
+    try:
+        localityReader = csv.reader(open('ORTSCHAFT.csv', 'r'), delimiter=';', quotechar='"')
+    except IOError:
+        print(
+            "\n##### ERROR ##### \nThe file 'ORTSCHAFT.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
+        quit()
+
+    localities = {}
+    headerlocalities = next(localityReader, None)
+    for localityrow in localityReader:
+        localities[localityrow[1]] = localityrow[2]
 
     print("buffering streets ...")
     try:
@@ -249,7 +264,7 @@ if __name__ == '__main__':
 
     outputFilename = "bev_addressesEPSG{}.csv".format(args.epsg)
     addressWriter = csv.writer(open(outputFilename, 'w'), delimiter=";", quotechar='"')
-    row = ['gemeinde', 'plz', 'strasse', 'nummer', 'hausname', 'x', 'y']
+    row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'nummer', 'hausname', 'x', 'y']
     if args.gkz:
         row.append('gkz')
     addressWriter.writerow(row)
@@ -271,6 +286,10 @@ if __name__ == '__main__':
         streetname = streetname.strip()  # remove the trailing whitespace after each street name
         districtname = districts[addressrow[1]]
         gkz = addressrow[1]
+
+        okz = addressrow[2]
+        localityname = localities[okz]
+
         plzname = addressrow[3]
         hausnr = buildHausNumber(addressrow[6], addressrow[7], addressrow[8], addressrow[9], addressrow[10], addressrow[11], addressrow[12])
         hausname = addressrow[14]
@@ -284,7 +303,7 @@ if __name__ == '__main__':
         # if the reprojection returned [0,0], this indicates an error: ignore these entries
         if coords[0] == '0' or coords[1] == '0':
             continue
-        row = [districtname, plzname, streetname, hausnr, hausname, coords[0], coords[1]]
+        row = [districtname, localityname, plzname, streetname, hausnr, hausname, coords[0], coords[1]]
         if args.gkz or args.sort != None:
             row.append(gkz)
         if args.sort != None:
