@@ -4,8 +4,8 @@
 info = """The idea for this script originates from
 https://github.com/BergWerkGIS/convert-bev-address-data/blob/master/README.md
 
-The input are the files STRASSE.csv, GEMEINDE.csv and ADRESSE.csv from the
-publicly available dataset of addresses of Austria, available for download at
+The input are the various csv files from the publicly available dataset of 
+addresses of Austria, available for download at
 http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL
 
 This script will attempt to download the data necessary automatically.
@@ -52,8 +52,8 @@ except ImportError:
 parser = argparse.ArgumentParser(prog='python3 convert-addresses.py')
 parser.add_argument('-epsg', type=int, default=3035, dest='epsg',
                     help='Specify the EPSG code of the coordinate  system used for the results. If none is given, this value defaults to EPSG:3035')
-parser.add_argument('-gkz', action='store_true', dest='gkz',
-                    help='Specify if GKZ should be included or not.')
+parser.add_argument('-buildings', action='store_true', dest='buildings',
+                    help='Specify if building addresses/locations should be included or not.')
 parser.add_argument('-sort', default=None, dest='sort',
                     help='Specify if and by which field the output should be sorted (possible values: gemeinde, plz, strasse, nummer, hausname, x, y, gkz).')
 args = parser.parse_args()
@@ -84,6 +84,16 @@ else:
     arcCenterRef = arcpy.SpatialReference(31255)
     arcEastRef = arcpy.SpatialReference(31256)
 
+class ProgressBar():
+    def __init__(self):
+        self.percentage = 0
+    
+    def update(self, new_percentage):
+        if new_percentage != self.percentage:
+            sys.stdout.write("\r{} %   ".format(str(new_percentage).ljust(6)))
+            sys.stdout.write('[{}]'.format(('#' * int(new_percentage / 2)).ljust(50)))
+            sys.stdout.flush()
+        self.percentage = new_percentage
 
 def downloadData():
     """This function downloads the address data from BEV and displays its terms
@@ -97,18 +107,12 @@ def downloadData():
     print("downloading address data from BEV")
     
     with open(addressdataUrl.split('/')[-1], 'wb') as handle:
+        pb = ProgressBar()
         for i, data in enumerate(response.iter_content(chunk_size=1000000)):
             handle.write(data)
-            # we draw a nice progess bar
             current_percentage = i * 1.3
-            sys.stdout.write("\r{} %   ".format(str(current_percentage).ljust(6)))
-            sys.stdout.write('[{}]'.format(('#' * int(current_percentage / 2)).ljust(50)))
-            sys.stdout.flush()
-            #print("{} %".format(i))
-    current_percentage = 100
-    sys.stdout.write("\r{} %   ".format(str(current_percentage).ljust(6)))
-    sys.stdout.write('[{}]'.format(('#' * int(current_percentage / 2)).ljust(50)))
-    sys.stdout.flush()
+            pb.update(current_percentage)
+    pb.update(100)
 
 
 def reproject(sourceCRS, point):
@@ -250,24 +254,19 @@ if __name__ == '__main__':
         quit()
     outputFilename = "bev_addressesEPSG{}.csv".format(args.epsg)
     addressWriter = csv.writer(open(outputFilename, 'w'), delimiter=";", quotechar='"')
-    row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'strassenzusatz', 'hausnrtext', 'hausnummer', 'hausname', 'x', 'y']
-    if args.gkz:
-        row.append('gkz')
+    row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'strassenzusatz', 'hausnrtext', 'hausnummer', 'hausname', 'gkz', 'x', 'y']
+    if args.buildings:
+        row.append('typ')
     addressWriter.writerow(row)
 
     # get the total file size for status output
     total_addresses = sum(1 for row in open('ADRESSE.csv', 'r'))
-    previous_percentage = 0
-    addresses = []
+    pb = ProgressBar()
+    addresses = {}
     # the main loop is this: each line in the ADRESSE.csv is parsed one by one
     for i, addressrow in enumerate(addressReader):
         current_percentage = round(float(i) / total_addresses * 100, 2)
-        if current_percentage != previous_percentage:
-            # we draw a nice progess bar
-            sys.stdout.write("\r{} %   ".format(str(current_percentage).ljust(6)))
-            sys.stdout.write('[{}]'.format(('#' * int(current_percentage / 2) ).ljust(50)))
-            sys.stdout.flush()
-            previous_percentage = current_percentage
+        pb.update(current_percentage)
         
         streetname = streets[addressrow["SKZ"]][0]
         streetsupplement = streets[addressrow["SKZ"]][1]
@@ -294,29 +293,53 @@ if __name__ == '__main__':
         # if the reprojection returned [0,0], this indicates an error: ignore these entries
         if coords[0] == '0' or coords[1] == '0':
             continue
+        # note: coordinates are expected as the last two list values in case of args.buildings, so please don't add anything behind it
         row = [districtname, localityname, plzname, streetname, streetsupplement, hausnrtext, hausnr, hausname, coords[0], coords[1]]
-        if args.gkz or args.sort != None:
-            row.append(addressrow["GKZ"])
-        if args.sort != None:
-            addresses.append(row)
-        else:
+        if args.buildings:
+            row.append('Adresskoordinate')
+        addresses[addressrow["ADRCD"]] = row
+        if not args.sort:
             addressWriter.writerow(row)
+
+    if args.buildings:
+        print("processing buildings ...")
+        try:
+            buildingReader = csv.DictReader(open('GEBAEUDE.csv', 'r', encoding='UTF-8-sig'), delimiter=';', quotechar='"')
+        except IOError:
+            print("\n##### ERROR ##### \nThe file 'GEBAEUDE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
+            quit()
+        # get the total file size for status output
+        total_buildings = sum(1 for row in open('ADRESSE.csv', 'r'))
+        pb = ProgressBar()
+        buildings = {}
+        # the main loop is this: each line in the GEBAEUDE.csv is parsed one by one
+        for i, buildingrow in enumerate(buildingReader):
+            current_percentage = round(float(i) / total_addresses * 100, 2)
+            pb.update(current_percentage)
+            if buildingrow["HAUPTADRESSE"] != "1":
+                continue
+            address_id = buildingrow["ADRCD"]
+            if address_id in addresses:
+                x = buildingrow["RW"]
+                y = buildingrow["HW"]
+                if x == "" or y == "":
+                    continue
+                coords = reproject(buildingrow["EPSG"], [x, y])
+                if coords[0] == '0' or coords[1] == '0':
+                    continue
+                building_address = addresses[address_id][:-3] + coords[:] + ["Hauskoordinate"]
+                addresses[address_id + buildingrow["SUBCD"]] = building_address
+                if not args.sort:
+                    addressWriter.writerow(building_address)
 
     if args.sort != None:
         print("\nsorting output ...")
-        previous_percentage = 0
-        sortedAddresses = sorted(addresses, key=lambda var: var[args.sort])
+        pb = ProgressBar()
+        sortedAddresses = sorted(addresses.values(), key=lambda var: var[args.sort])
         print("writing output ...")
         for i, row in enumerate(sortedAddresses):
             current_percentage = round(float(i) / len(sortedAddresses) * 100, 2)
-            if current_percentage != previous_percentage:
-                # we draw a nice progess bar
-                sys.stdout.write("\r{} %   ".format(str(current_percentage).ljust(6)))
-                sys.stdout.write('[{}]'.format(('#' * int(current_percentage / 2) ).ljust(50)))
-                sys.stdout.flush()
-                previous_percentage = current_percentage
-            if not args.gkz:
-                del row[7]
+            pb.update(current_percentage)
             addressWriter.writerow(row)
 
     print("\nfinished")
