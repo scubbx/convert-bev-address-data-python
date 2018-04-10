@@ -208,12 +208,13 @@ if __name__ == '__main__':
         print("There was an error")
         quit()
 
+
+    output_header_row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'strassenzusatz', 'hausnrtext', 'hausnummer', 'hausname', 'gkz', 'x', 'y']
     if args.sort != None:
-        possibleValues = ['gemeinde', 'plz', 'strasse', 'nummer', 'hausname', 'x', 'y', 'gkz']
-        if args.sort not in possibleValues:
-            print("\n##### ERROR ##### \nSort parameter is not allowed. Use one of gemeinde, plz, strasse, nummer, hausname, x, y, gkz")
+        if args.sort not in output_header_row:
+            print("\n##### ERROR ##### \nSort parameter is not allowed. Use one of %s" % output_header_row)
             quit()
-        args.sort = possibleValues.index(args.sort)
+        args.sort = output_header_row.index(args.sort)
 
     print("buffering localities ...")
     try:
@@ -254,10 +255,10 @@ if __name__ == '__main__':
         quit()
     outputFilename = "bev_addressesEPSG{}.csv".format(args.epsg)
     addressWriter = csv.writer(open(outputFilename, 'w'), delimiter=";", quotechar='"')
-    row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'strassenzusatz', 'hausnrtext', 'hausnummer', 'hausname', 'gkz', 'x', 'y']
+    
     if args.buildings:
-        row.append('typ')
-    addressWriter.writerow(row)
+        output_header_row.append('typ')
+    addressWriter.writerow(output_header_row)
 
     # get the total file size for status output
     total_addresses = sum(1 for row in open('ADRESSE.csv', 'r'))
