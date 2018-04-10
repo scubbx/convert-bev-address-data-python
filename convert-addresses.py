@@ -183,21 +183,16 @@ def buildHausNumber(hausnrzahl1, hausnrbuchstabe1, hausnrverbindung1, hausnrzahl
 
 def preparations():
     """check for necessary files and issue downloads when necessary"""
-
-    if not (os.path.isfile('STRASSE.csv') and os.path.isfile('GEMEINDE.csv') and os.path.isfile('ADRESSE.csv')):
+    csv_files = ["STRASSE.csv", "GEMEINDE.csv", "ADRESSE.csv", "GEBAEUDE.csv", "ORTSCHAFT.csv"]
+    if not all(os.path.isfile(csv) for csv in csv_files):
         # ckeck if the packed version exists
         if not os.path.isfile('Adresse_Relationale_Tabellen-Stichtagsdaten.zip'):
             # if not, download it
             downloadData()
         with zipfile.ZipFile('Adresse_Relationale_Tabellen-Stichtagsdaten.zip', 'r') as myzip:
-            print("extracting STRASSE.csv")
-            myzip.extract('STRASSE.csv');
-            print("extracting GEMEINDE.csv")
-            myzip.extract('GEMEINDE.csv');
-            print("extracting ORTSCHAFT.csv")
-            myzip.extract('ORTSCHAFT.csv');
-            print("extracting ADRESSE.csv")
-            myzip.extract('ADRESSE.csv');
+            for csv in csv_files:
+                print("extracting %s" % csv)
+                myzip.extract(csv)
     return True
 
 if __name__ == '__main__':
