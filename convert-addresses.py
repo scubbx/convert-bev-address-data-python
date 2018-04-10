@@ -328,6 +328,9 @@ if __name__ == '__main__':
                 coords = reproject(buildingrow["EPSG"], [x, y])
                 if coords[0] == '0' or coords[1] == '0':
                     continue
+                if coords[0] == addresses[address_id][-3] and coords[1] == addresses[address_id][-2]:
+                    # building location identical to address location => ignore
+                    continue
                 building_address = addresses[address_id][:-3] + coords[:] + ["Hauskoordinate"]
                 addresses[address_id + buildingrow["SUBCD"]] = building_address
                 if not args.sort:
