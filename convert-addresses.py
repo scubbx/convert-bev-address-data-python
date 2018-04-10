@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 info = """The idea for this script originates from
@@ -217,50 +218,41 @@ if __name__ == '__main__':
 
     print("buffering localities ...")
     try:
-        localityReader = csv.reader(open('ORTSCHAFT.csv', 'r'), delimiter=';', quotechar='"')
+        localityReader = csv.DictReader(open('ORTSCHAFT.csv', 'r', encoding='UTF-8-sig'), delimiter=';', quotechar='"')
     except IOError:
         print(
             "\n##### ERROR ##### \nThe file 'ORTSCHAFT.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
         quit()
-
     localities = {}
-    headerlocalities = next(localityReader, None)
     for localityrow in localityReader:
-        localities[localityrow[1]] = localityrow[2]
+        localities[localityrow['OKZ']] = localityrow['ORTSNAME']
 
     print("buffering streets ...")
     try:
-        streetReader = csv.reader(open('STRASSE.csv', 'r'), delimiter=';', quotechar='"')
+        streetReader = csv.DictReader(open('STRASSE.csv', 'r', encoding='UTF-8-sig'), delimiter=';', quotechar='"')
     except IOError:
         print("\n##### ERROR ##### \nThe file 'STRASSE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
         quit()
-
     streets = {}
-    headerstreets = next(streetReader, None)
     for streetrow in streetReader:
-        streets[streetrow[0]] = [streetrow[1], streetrow[2]]
+        streets[streetrow['SKZ']] = [streetrow['STRASSENNAME'], streetrow['STRASSENNAMENZUSATZ']]
 
     print("buffering districts ...")
     try:
-        districtReader = csv.reader(open('GEMEINDE.csv', 'r'), delimiter=';', quotechar='"')
+        districtReader = csv.DictReader(open('GEMEINDE.csv', 'r', encoding='UTF-8-sig'), delimiter=';', quotechar='"')
     except IOError:
         print("\n##### ERROR ##### \nThe file 'GEMEINDE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
         quit()
-
     districts = {}
-    headerdistricts = next(districtReader, None)
     for districtrow in districtReader:
-        districts[districtrow[0]] = districtrow[1]
+        districts[districtrow['GKZ']] = districtrow['GEMEINDENAME']
 
     print("processing addresses ...")
     try:
-        addressReader = csv.reader(open('ADRESSE.csv', 'r'), delimiter=';', quotechar='"')
+        addressReader = csv.DictReader(open('ADRESSE.csv', 'r', encoding='UTF-8-sig'), delimiter=';', quotechar='"')
     except IOError:
         print("\n##### ERROR ##### \nThe file 'ADRESSE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
         quit()
-
-    headeraddresses = next(addressReader, None)
-
     outputFilename = "bev_addressesEPSG{}.csv".format(args.epsg)
     addressWriter = csv.writer(open(outputFilename, 'w'), delimiter=";", quotechar='"')
     row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'strassenzusatz', 'hausnrtext', 'hausnummer', 'hausname', 'x', 'y']
@@ -269,7 +261,7 @@ if __name__ == '__main__':
     addressWriter.writerow(row)
 
     # get the total file size for status output
-    total_addresses = sum(1 for row in csv.reader(open('ADRESSE.csv', 'r'), delimiter=';', quotechar='"'))
+    total_addresses = sum(1 for row in open('ADRESSE.csv', 'r'))
     previous_percentage = 0
     addresses = []
     # the main loop is this: each line in the ADRESSE.csv is parsed one by one
@@ -281,30 +273,28 @@ if __name__ == '__main__':
             sys.stdout.write('[{}]'.format(('#' * int(current_percentage / 2) ).ljust(50)))
             sys.stdout.flush()
             previous_percentage = current_percentage
-
-        streetname = streets[addressrow[4]][0]
-        streetsupplement = streets[addressrow[4]][1]
+        
+        streetname = streets[addressrow["SKZ"]][0]
+        streetsupplement = streets[addressrow["SKZ"]][1]
         streetname = streetname.strip()  # remove the trailing whitespace after each street name
-
-        districtname = districts[addressrow[1]]
-        gkz = addressrow[1]
-
-        okz = addressrow[2]
-        localityname = localities[okz]
-
-        plzname = addressrow[3]
-
-        hausnrtext = addressrow[6]
-        hausnr = buildHausNumber(addressrow[7], addressrow[8], addressrow[9], addressrow[10], addressrow[11], addressrow[12])
-
-        hausname = addressrow[14]
-
-        x = addressrow[15]
-        y = addressrow[16]
+        districtname = districts[addressrow["GKZ"]]
+        localityname = localities[addressrow["OKZ"]]
+        plzname = addressrow["PLZ"]
+        hausnrtext = addressrow["HAUSNRTEXT"]
+        hausnr = buildHausNumber(
+            addressrow["HAUSNRZAHL1"], 
+            addressrow["HAUSNRBUCHSTABE1"],
+            addressrow["HAUSNRVERBINDUNG1"],
+            addressrow["HAUSNRZAHL2"],
+            addressrow["HAUSNRBUCHSTABE2"],
+            addressrow["HAUSNRBEREICH"])
+        hausname = addressrow["HOFNAME"]
+        x = addressrow["RW"]
+        y = addressrow["HW"]
         # some entries don't have coordinates: ignore these entries
         if x == '' or y == '':
             continue
-        usedprojection = addressrow[17]
+        usedprojection = addressrow["EPSG"]
         coords = reproject(usedprojection, [x, y])
         # if the reprojection returned [0,0], this indicates an error: ignore these entries
         if coords[0] == '0' or coords[1] == '0':
