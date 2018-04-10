@@ -301,7 +301,7 @@ if __name__ == '__main__':
             continue
         row = [districtname, localityname, plzname, streetname, streetsupplement, hausnrtext, hausnr, hausname, coords[0], coords[1]]
         if args.gkz or args.sort != None:
-            row.append(gkz)
+            row.append(addressrow["GKZ"])
         if args.sort != None:
             addresses.append(row)
         else:
