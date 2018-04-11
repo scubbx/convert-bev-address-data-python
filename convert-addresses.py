@@ -310,7 +310,7 @@ if __name__ == '__main__':
             print("\n##### ERROR ##### \nThe file 'GEBAEUDE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
             quit()
         # get the total file size for status output
-        total_buildings = sum(1 for row in open('ADRESSE.csv', 'r'))
+        total_buildings = sum(1 for row in open('GEBAEUDE.csv', 'r'))
         pb = ProgressBar()
         buildings = {}
         # the main loop is this: each line in the GEBAEUDE.csv is parsed one by one
