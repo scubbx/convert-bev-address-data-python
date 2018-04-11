@@ -272,7 +272,8 @@ if __name__ == '__main__':
         streetname = streets[addressrow["SKZ"]][0]
         streetsupplement = streets[addressrow["SKZ"]][1]
         streetname = streetname.strip()  # remove the trailing whitespace after each street name
-        districtname = districts[addressrow["GKZ"]]
+        gkz = addressrow["GKZ"]
+        districtname = districts[gkz]
         localityname = localities[addressrow["OKZ"]]
         plzname = addressrow["PLZ"]
         hausnrtext = addressrow["HAUSNRTEXT"]
@@ -295,7 +296,7 @@ if __name__ == '__main__':
         if coords[0] == '0' or coords[1] == '0':
             continue
         # note: coordinates are expected as the last two list values in case of args.buildings, so please don't add anything behind it
-        row = [districtname, localityname, plzname, streetname, streetsupplement, hausnrtext, hausnr, hausname, coords[0], coords[1]]
+        row = [districtname, localityname, plzname, streetname, streetsupplement, hausnrtext, hausnr, hausname, gkz, coords[0], coords[1]]
         if args.buildings:
             row.append('Adresskoordinate')
         addresses[addressrow["ADRCD"]] = row
