@@ -52,8 +52,6 @@ except ImportError:
 parser = argparse.ArgumentParser(prog='python3 convert-addresses.py')
 parser.add_argument('-epsg', type=int, default=3035, dest='epsg',
                     help='Specify the EPSG code of the coordinate  system used for the results. If none is given, this value defaults to EPSG:3035')
-parser.add_argument('-buildings', action='store_true', dest='buildings',
-                    help='Specify if building addresses/locations should be included or not.')
 parser.add_argument('-sort', default=None, dest='sort',
                     help='Specify if and by which field the output should be sorted (possible values: gemeinde, plz, strasse, nummer, hausname, x, y, gkz).')
 args = parser.parse_args()
@@ -85,15 +83,25 @@ else:
     arcEastRef = arcpy.SpatialReference(31256)
 
 class ProgressBar():
-    def __init__(self):
+    def __init__(self, message=None):
         self.percentage = 0
+        if message:
+            print(message)
     
     def update(self, new_percentage):
+        new_percentage = round(new_percentage, 2)
         if new_percentage != self.percentage:
             sys.stdout.write("\r{} %   ".format(str(new_percentage).ljust(6)))
             sys.stdout.write('[{}]'.format(('#' * int(new_percentage / 2)).ljust(50)))
             sys.stdout.flush()
         self.percentage = new_percentage
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.update(100)
+        sys.stdout.write("\n")
 
 def downloadData():
     """This function downloads the address data from BEV and displays its terms
@@ -104,15 +112,11 @@ def downloadData():
         quit()
     addressdataUrl = "http://www.bev.gv.at/pls/portal/docs/PAGE/BEV_PORTAL_CONTENT_ALLGEMEIN/0200_PRODUKTE/UNENTGELTLICHE_PRODUKTE_DES_BEV/Adresse_Relationale_Tabellen-Stichtagsdaten.zip"
     response = requests.get(addressdataUrl, stream=True)
-    print("downloading address data from BEV")
-    
-    with open(addressdataUrl.split('/')[-1], 'wb') as handle:
-        pb = ProgressBar()
+    with open(addressdataUrl.split('/')[-1], 'wb') as handle, ProgressBar("downloading address data from BEV") as pb:
         for i, data in enumerate(response.iter_content(chunk_size=1000000)):
             handle.write(data)
             current_percentage = i * 1.3
             pb.update(current_percentage)
-    pb.update(100)
 
 
 def reproject(sourceCRS, point):
@@ -184,6 +188,22 @@ def buildHausNumber(hausnrzahl1, hausnrbuchstabe1, hausnrverbindung1, hausnrzahl
     if hausnrbereich != "keine Angabe": compiledHausNr += ", {}".format(hausnrbereich)
     return compiledHausNr
 
+def buildSubHouseNumber(hausnrzahl3, hausnrbuchstabe3, hausnrverbindung2, hausnrzahl4, hausnrbuchstabe4, hausnrverbindung3):
+    """This function takes all the different single parts of the input file
+    that belong to the sub address and combines them into one single string"""
+
+    hausnr3 = hausnrzahl3
+    hausnr4 = hausnrzahl4
+    compiledHausNr = ""
+    if hausnrbuchstabe3 != "": hausnr3 += hausnrbuchstabe3
+    if hausnrbuchstabe4 != "": hausnr4 += hausnrbuchstabe4
+    # ignore hausnrverbindung2
+    if hausnrverbindung3 in ["", "-", "/"]:
+        compiledHausNr = hausnr3 + hausnrverbindung3 + hausnr4
+    else:
+        compiledHausNr = hausnr3 +" "+ hausnrverbindung3 +" "+ hausnr4
+    return compiledHausNr
+
 
 def preparations():
     """check for necessary files and issue downloads when necessary"""
@@ -209,7 +229,7 @@ if __name__ == '__main__':
         quit()
 
 
-    output_header_row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'strassenzusatz', 'hausnrtext', 'hausnummer', 'hausname', 'gkz', 'x', 'y']
+    output_header_row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'strassenzusatz', 'hausnrtext', 'hausnummer', 'hausname', 'adress_x', 'adress_y', 'subadresse', 'haus_x', 'haus_y', 'haus_bez', 'adrcd', 'gkz']
     if args.sort != None:
         if args.sort not in output_header_row:
             print("\n##### ERROR ##### \nSort parameter is not allowed. Use one of %s" % output_header_row)
@@ -235,7 +255,7 @@ if __name__ == '__main__':
         quit()
     streets = {}
     for streetrow in streetReader:
-        streets[streetrow['SKZ']] = [streetrow['STRASSENNAME'], streetrow['STRASSENNAMENZUSATZ']]
+        streets[streetrow['SKZ']] = [streetrow['STRASSENNAME'].strip(), streetrow['STRASSENNAMENZUSATZ']]
 
     print("buffering districts ...")
     try:
@@ -247,76 +267,67 @@ if __name__ == '__main__':
     for districtrow in districtReader:
         districts[districtrow['GKZ']] = districtrow['GEMEINDENAME']
 
-    print("processing addresses ...")
     try:
         addressReader = csv.DictReader(open('ADRESSE.csv', 'r', encoding='UTF-8-sig'), delimiter=';', quotechar='"')
     except IOError:
         print("\n##### ERROR ##### \nThe file 'ADRESSE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
         quit()
     outputFilename = "bev_addressesEPSG{}.csv".format(args.epsg)
-    addressWriter = csv.writer(open(outputFilename, 'w'), delimiter=";", quotechar='"')
-    
-    if args.buildings:
-        output_header_row.append('typ')
-    addressWriter.writerow(output_header_row)
 
     # get the total file size for status output
     total_addresses = sum(1 for row in open('ADRESSE.csv', 'r'))
-    pb = ProgressBar()
-    addresses = {}
-    # the main loop is this: each line in the ADRESSE.csv is parsed one by one
-    for i, addressrow in enumerate(addressReader):
-        current_percentage = round(float(i) / total_addresses * 100, 2)
-        pb.update(current_percentage)
-        
-        streetname = streets[addressrow["SKZ"]][0]
-        streetsupplement = streets[addressrow["SKZ"]][1]
-        streetname = streetname.strip()  # remove the trailing whitespace after each street name
-        gkz = addressrow["GKZ"]
-        districtname = districts[gkz]
-        localityname = localities[addressrow["OKZ"]]
-        plzname = addressrow["PLZ"]
-        hausnrtext = addressrow["HAUSNRTEXT"]
-        hausnr = buildHausNumber(
-            addressrow["HAUSNRZAHL1"], 
-            addressrow["HAUSNRBUCHSTABE1"],
-            addressrow["HAUSNRVERBINDUNG1"],
-            addressrow["HAUSNRZAHL2"],
-            addressrow["HAUSNRBUCHSTABE2"],
-            addressrow["HAUSNRBEREICH"])
-        hausname = addressrow["HOFNAME"]
-        x = addressrow["RW"]
-        y = addressrow["HW"]
-        # some entries don't have coordinates: ignore these entries
-        if x == '' or y == '':
-            continue
-        usedprojection = addressrow["EPSG"]
-        coords = reproject(usedprojection, [x, y])
-        # if the reprojection returned [0,0], this indicates an error: ignore these entries
-        if coords[0] == '0' or coords[1] == '0':
-            continue
-        # note: coordinates are expected as the last two list values in case of args.buildings, so please don't add anything behind it
-        row = [districtname, localityname, plzname, streetname, streetsupplement, hausnrtext, hausnr, hausname, gkz, coords[0], coords[1]]
-        if args.buildings:
-            row.append('Adresskoordinate')
-        addresses[addressrow["ADRCD"]] = row
-        if not args.sort:
-            addressWriter.writerow(row)
-
-    if args.buildings:
-        print("processing buildings ...")
-        try:
-            buildingReader = csv.DictReader(open('GEBAEUDE.csv', 'r', encoding='UTF-8-sig'), delimiter=';', quotechar='"')
-        except IOError:
-            print("\n##### ERROR ##### \nThe file 'GEBAEUDE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
-            quit()
-        # get the total file size for status output
-        total_buildings = sum(1 for row in open('GEBAEUDE.csv', 'r'))
-        pb = ProgressBar()
+    with ProgressBar("processing addresses ...") as pb:
+        addresses = {}
         buildings = {}
-        # the main loop is this: each line in the GEBAEUDE.csv is parsed one by one
+        for i, reader_row in enumerate(addressReader):
+            current_percentage = float(i) / total_addresses * 100
+            pb.update(current_percentage)
+
+            x = reader_row["RW"]
+            y = reader_row["HW"]
+            # some entries don't have coordinates: ignore these entries
+            if x == '' or y == '':
+                continue
+            usedprojection = reader_row["EPSG"]
+            coords = reproject(usedprojection, [x, y])
+            # if the reprojection returned [0,0], this indicates an error: ignore these entries
+            if coords[0] == '0' or coords[1] == '0':
+                continue
+            
+            address_id = reader_row["ADRCD"]
+            address = {
+                "gemeinde": districts[reader_row["GKZ"]],
+                "ortschaft": localities[reader_row["OKZ"]],
+                "plz": reader_row["PLZ"],
+                "strasse": streets[reader_row["SKZ"]][0],
+                "strassenzusatz": streets[reader_row["SKZ"]][1],
+                "hausnrtext": reader_row["HAUSNRTEXT"],
+                "hausnummer": buildHausNumber(
+                    reader_row["HAUSNRZAHL1"], 
+                    reader_row["HAUSNRBUCHSTABE1"],
+                    reader_row["HAUSNRVERBINDUNG1"],
+                    reader_row["HAUSNRZAHL2"],
+                    reader_row["HAUSNRBUCHSTABE2"],
+                    reader_row["HAUSNRBEREICH"]),
+                "hausname": reader_row["HOFNAME"],
+                "gkz": reader_row["GKZ"],
+                "adress_x": coords[0],
+                "adress_y": coords[1],
+                "adrcd": address_id,
+            }
+            addresses[address_id] = address
+            buildings[address_id] = []
+
+    try:
+        buildingReader = csv.DictReader(open('GEBAEUDE.csv', 'r', encoding='UTF-8-sig'), delimiter=';', quotechar='"')
+    except IOError:
+        print("\n##### ERROR ##### \nThe file 'GEBAEUDE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
+        quit()
+    # get the total file size for status output
+    total_buildings = sum(1 for row in open('GEBAEUDE.csv', 'r'))
+    with ProgressBar("processing buildings ...") as pb:
         for i, buildingrow in enumerate(buildingReader):
-            current_percentage = round(float(i) / total_addresses * 100, 2)
+            current_percentage = float(i) / total_addresses * 100
             pb.update(current_percentage)
             if buildingrow["HAUPTADRESSE"] != "1":
                 continue
@@ -329,23 +340,71 @@ if __name__ == '__main__':
                 coords = reproject(buildingrow["EPSG"], [x, y])
                 if coords[0] == '0' or coords[1] == '0':
                     continue
-                if coords[0] == addresses[address_id][-3] and coords[1] == addresses[address_id][-2]:
-                    # building location identical to address location => ignore
-                    continue
-                building_address = addresses[address_id][:-3] + coords[:] + ["Hauskoordinate"]
-                addresses[address_id + buildingrow["SUBCD"]] = building_address
-                if not args.sort:
-                    addressWriter.writerow(building_address)
+                subaddress = buildSubHouseNumber(
+                    buildingrow["HAUSNRZAHL3"],
+                    buildingrow["HAUSNRBUCHSTABE3"],
+                    buildingrow["HAUSNRVERBINDUNG2"],
+                    buildingrow["HAUSNRZAHL4"],
+                    buildingrow["HAUSNRBUCHSTABE4"],
+                    buildingrow["HAUSNRVERBINDUNG3"]
+                )
+                building_info = coords
+                building_info.append(subaddress)
+                building_info.append(buildingrow["HAUSNRGEBAEUDEBEZ"])
+                buildings[address_id].append(building_info)
 
     if args.sort != None:
         print("\nsorting output ...")
-        pb = ProgressBar()
-        sortedAddresses = sorted(addresses.values(), key=lambda var: var[args.sort])
-        print("writing output ...")
-        for i, row in enumerate(sortedAddresses):
-            current_percentage = round(float(i) / len(sortedAddresses) * 100, 2)
+        output = sorted(addresses.values(), key=lambda var: var[args.sort])
+    else:
+        output = addresses.values()
+    #addressWriter = csv.DictWriter(open(outputFilename, 'w'), output_header_row, extrasaction="ignore", delimiter=";", quotechar='"')
+    addressWriter = csv.DictWriter(open(outputFilename, 'w'), output_header_row, delimiter=";", quotechar='"')
+    addressWriter.writeheader()
+    num_addresses_without_buildings = 0
+    num_addresses_with_one_building = 0
+    num_addresses_with_more_buildings = 0
+    num_building_without_subadress = 0
+    num_building_with_subadress = 0
+    num_single_building_without_subadress = 0
+    num_single_building_with_subadress = 0
+    with ProgressBar("writing output ...") as pb:
+        for i, row in enumerate(output):
+            current_percentage = float(i) / len(output) * 100
             pb.update(current_percentage)
-            addressWriter.writerow(row)
+            address_buildings = buildings[row["adrcd"]]
+            if len(address_buildings) == 0:
+                num_addresses_without_buildings += 1
+                addressWriter.writerow(row)
+                continue
+            elif len(address_buildings) == 1:
+                num_addresses_with_one_building += 1
+                single_building = True
+            else:
+                num_addresses_with_more_buildings += 1
+                single_building = False
+            for building_info in address_buildings:
+                row["haus_x"] = building_info[0]
+                row["haus_y"] = building_info[1]
+                row["subadresse"] = building_info[2]
+                row["haus_bez"] = building_info[3]
+                if row["subadresse"] == "":
+                    if single_building:
+                        num_single_building_without_subadress += 1
+                    else:
+                        num_building_without_subadress += 1
+                else:
+                    if single_building:
+                        num_single_building_with_subadress += 1
+                    else:
+                        num_building_with_subadress += 1
+                addressWriter.writerow(row)
 
     print("\nfinished")
     print( time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()) )
+
+    print("{:,} addresses without buildings".format(num_addresses_without_buildings))
+    print("{:,} addresses with exactly one building".format(num_addresses_with_one_building))
+    print("from which {:,} buildings have a subaddress and {:,} buildings don't".format(num_single_building_with_subadress, num_single_building_without_subadress))
+    print("{:,} addresses with more than one building".format(num_addresses_with_more_buildings))
+    print("from which {:,} buildings have a subaddress and {:,} buildings don't".format(num_building_with_subadress, num_building_without_subadress))
