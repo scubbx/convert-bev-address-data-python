@@ -54,6 +54,10 @@ parser.add_argument('-epsg', type=int, default=3035, dest='epsg',
                     help='Specify the EPSG code of the coordinate  system used for the results. If none is given, this value defaults to EPSG:3035')
 parser.add_argument('-sort', default=None, dest='sort',
                     help='Specify if and by which field the output should be sorted (possible values: gemeinde, plz, strasse, nummer, hausname, x, y, gkz).')
+parser.add_argument('-compatibility_mode', action='store_true', dest='compatibility_mode',
+                    help='''Compatiblity mode for bev-reverse-geocoder with only one entry per address. In case of addresses with exactly one building, 
+                        the building position is taken, otherwise the address position (more precisely the building position replaces the column, 
+                        where bev-reverse-geocoder expected the former single position and in case of no/multiple buildings it's set equal to the address location).''')
 args = parser.parse_args()
 
 # the target EPSG is set according to the argument
@@ -228,8 +232,7 @@ if __name__ == '__main__':
         print("There was an error")
         quit()
 
-
-    output_header_row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'strassenzusatz', 'hausnrtext', 'hausnummer', 'hausname', 'adress_x', 'adress_y', 'subadresse', 'haus_x', 'haus_y', 'haus_bez', 'adrcd', 'gkz']
+    output_header_row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'strassenzusatz', 'hausnrtext', 'hausnummer', 'hausname', 'haus_x', 'haus_y', 'gkz', 'adress_x', 'adress_y', 'subadresse', 'haus_bez', 'adrcd']
     if args.sort != None:
         if args.sort not in output_header_row:
             print("\n##### ERROR ##### \nSort parameter is not allowed. Use one of %s" % output_header_row)
@@ -375,6 +378,9 @@ if __name__ == '__main__':
             address_buildings = buildings[row["adrcd"]]
             if len(address_buildings) == 0:
                 num_addresses_without_buildings += 1
+                if args.compatibility_mode:
+                    row["haus_x"] = row["adress_x"]
+                    row["haus_y"] = row["adress_y"]
                 addressWriter.writerow(row)
                 continue
             elif len(address_buildings) == 1:
@@ -383,6 +389,12 @@ if __name__ == '__main__':
             else:
                 num_addresses_with_more_buildings += 1
                 single_building = False
+                if args.compatibility_mode:
+                    row["haus_x"] = row["adress_x"]
+                    row["haus_y"] = row["adress_y"]
+                    addressWriter.writerow(row)
+                    continue
+
             for building_info in address_buildings:
                 row["haus_x"] = building_info[0]
                 row["haus_y"] = building_info[1]
