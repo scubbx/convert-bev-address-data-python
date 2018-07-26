@@ -28,6 +28,7 @@ try:
 except ImportError:
     print("- no module named requests, automatic download of data is deactivated\n")
 import os.path
+import xml.etree.cElementTree as ET
 import zipfile
 try:
     from osgeo import osr
@@ -58,10 +59,16 @@ parser.add_argument('-compatibility_mode', action='store_true', dest='compatibil
                     help='''Compatiblity mode for bev-reverse-geocoder with only one entry per address. In case of addresses with exactly one building, 
                         the building position is taken, otherwise the address position (more precisely the building position replaces the column, 
                         where bev-reverse-geocoder expected the former single position and in case of no/multiple buildings it's set equal to the address location).''')
+parser.add_argument('-output_format', default='csv', dest='output_format',
+                    help='''Specify the output format. Either csv (default) or osm. If osm is chosen, all other arguments are ignored.''')
 args = parser.parse_args()
 
-# the target EPSG is set according to the argument
+if args.output_format == 'osm':
+    args.epsg = 4326
+    args.sort = 'plz'
+    args.compatibility_mode = False
 
+# the target EPSG is set according to the argument
 if not arcpyModule:
     # for OsGeo
     targetRef = osr.SpatialReference()
@@ -86,6 +93,85 @@ else:
     arcCenterRef = arcpy.SpatialReference(31255)
     arcEastRef = arcpy.SpatialReference(31256)
 
+class CsvWriter():
+    def __init__(self, output_filename, header_row):
+        self.address_writer = csv.DictWriter(open(output_filename, 'w'), header_row, delimiter=";", quotechar='"')
+        self.address_writer.writeheader()
+
+    def add_address(self, address):
+        self.address_writer.writerow(address)
+
+    def close(self):
+        self.address_writer = None
+
+class OsmWriter():
+    def __init__(self):
+        self._current_id = 0
+        self._current_postcode = None
+        self.root = None
+        self._bev_date = self._get_addr_date()
+
+    def _get_addr_date(self):
+        z = zipfile.ZipFile('Adresse_Relationale_Tabellen-Stichtagsdaten.zip', 'r')
+        for f in z.infolist():
+            if f.filename == 'ADRESSE.csv':
+                return "%d-%02d-%02d" % f.date_time[:3]
+
+    def add_address(self, address):
+        if self._current_postcode != address["plz"]:
+            if self.root != None:
+                self.close()
+            self._current_postcode = address["plz"]
+            self.root = ET.Element("osm", version="0.6", generator="convert-addresses.py", upload="never")
+        if "haus_x" in address and str(address["haus_x"]).strip() != "":
+            node = ET.SubElement(self.root, "node", id=self._get_next_id(), lat=str(address["haus_y"]), lon=str(address["haus_x"]))
+        else:
+            node = ET.SubElement(self.root, "node", id=self._get_next_id(), lat=str(address["adress_y"]), lon=str(address["adress_x"]))
+        ET.SubElement(node, "tag", k="addr:country", v="AT")
+        ET.SubElement(node, "tag", k="at_bev:addr_date", v=self._bev_date)
+        
+        ET.SubElement(node, "tag", k="addr:postcode", v=address["plz"])
+        if address["strasse"] == address["ortschaft"]:
+            ET.SubElement(node, "tag", k="addr:place", v=address["strasse"])
+            ET.SubElement(node, "tag", k="addr:city", v=address["gemeinde"])
+        else:
+            ET.SubElement(node, "tag", k="addr:street", v=address["strasse"])
+            ortschaft = address["ortschaft"]
+            if address["gemeinde"] in ("Innsbruck", "Wels"):
+                ET.SubElement(node, "tag", k="addr:city", v=address["gemeinde"])
+                ET.SubElement(node, "tag", k="addr:suburb", v=ortschaft)
+            elif ortschaft.startswith("Villach"):
+                ET.SubElement(node, "tag", k="addr:city", v="Villach")
+                ET.SubElement(node, "tag", k="addr:suburb", v=ortschaft[8:])
+            else:
+                index_comma = ortschaft.find(",")
+                if index_comma > -1:
+                    if ortschaft.startswith("Wien"):
+                        ET.SubElement(node, "tag", k="addr:suburb", v=ortschaft[index_comma+1:])
+                    elif ortschaft.startswith("Graz") or ortschaft.startswith("Klagenfurt"):
+                        ET.SubElement(node, "tag", k="addr:suburb", v=ortschaft[index_comma+9:])
+                    ortschaft = ortschaft[:index_comma]
+                ET.SubElement(node, "tag", k="addr:city", v=ortschaft)
+        ET.SubElement(node, "tag", k="addr:housenumber", v=address["hausnummer"])
+        if "hausname" in address and address["hausname"].strip() != "":
+            ET.SubElement(node, "tag", k="addr:housename", v=address["hausname"])
+        if "subadresse" in address and address["subadresse"].strip() != "":
+            ET.SubElement(node, "tag", k="addr:unit", v=address["subadresse"])
+        if "haus_bez" in address and address["haus_bez"].strip() != "":
+            ET.SubElement(node, "tag", k="note", v=address["haus_bez"])
+
+    def close(self):
+        tree = ET.ElementTree(self.root)
+        directory = "%sxxx" % self._current_postcode[0]
+        if not os.path.isdir(directory):
+            os.makedirs(directory)
+        self.output_filename = "%s.osm" % self._current_postcode
+        tree.write(os.path.join(directory, self.output_filename), encoding="utf-8", xml_declaration=True)
+
+    def _get_next_id(self):
+        self._current_id -= 1
+        return str(self._current_id)
+
 class ProgressBar():
     def __init__(self, message=None):
         self.percentage = 0
@@ -107,7 +193,7 @@ class ProgressBar():
         self.update(100)
         sys.stdout.write("\n")
 
-def downloadData():
+def download_data():
     """This function downloads the address data from BEV and displays its terms
     of usage"""
 
@@ -174,7 +260,7 @@ def reproject(sourceCRS, point):
     return [round(float(p), 6) for p in transformedPoint]
         
 
-def buildHausNumber(hausnrzahl1, hausnrbuchstabe1, hausnrverbindung1, hausnrzahl2, hausnrbuchstabe2, hausnrbereich):
+def build_housenumber(hausnrzahl1, hausnrbuchstabe1, hausnrverbindung1, hausnrzahl2, hausnrbuchstabe2, hausnrbereich):
     """This function takes all the different single parts of the input file
     that belong to the house number and combines them into one single string"""
 
@@ -189,10 +275,10 @@ def buildHausNumber(hausnrzahl1, hausnrbuchstabe1, hausnrverbindung1, hausnrzahl
         compiledHausNr = hausnr1 + " " + hausnr2
     else:
         compiledHausNr = hausnr1
-    if hausnrbereich != "keine Angabe": compiledHausNr += ", {}".format(hausnrbereich)
+    #if hausnrbereich != "keine Angabe": compiledHausNr += ", {}".format(hausnrbereich)
     return compiledHausNr
 
-def buildSubHouseNumber(hausnrzahl3, hausnrbuchstabe3, hausnrverbindung2, hausnrzahl4, hausnrbuchstabe4, hausnrverbindung3):
+def build_sub_housenumber(hausnrzahl3, hausnrbuchstabe3, hausnrverbindung2, hausnrzahl4, hausnrbuchstabe4, hausnrverbindung3):
     """This function takes all the different single parts of the input file
     that belong to the sub address and combines them into one single string"""
 
@@ -216,7 +302,7 @@ def preparations():
         # ckeck if the packed version exists
         if not os.path.isfile('Adresse_Relationale_Tabellen-Stichtagsdaten.zip'):
             # if not, download it
-            downloadData()
+            download_data()
         with zipfile.ZipFile('Adresse_Relationale_Tabellen-Stichtagsdaten.zip', 'r') as myzip:
             for csv in csv_files:
                 print("extracting %s" % csv)
@@ -237,7 +323,7 @@ if __name__ == '__main__':
         if args.sort not in output_header_row:
             print("\n##### ERROR ##### \nSort parameter is not allowed. Use one of %s" % output_header_row)
             quit()
-        args.sort = output_header_row.index(args.sort)
+        #args.sort = output_header_row.index(args.sort)
 
     print("buffering localities ...")
     try:
@@ -275,7 +361,7 @@ if __name__ == '__main__':
     except IOError:
         print("\n##### ERROR ##### \nThe file 'ADRESSE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
         quit()
-    outputFilename = "bev_addressesEPSG{}.csv".format(args.epsg)
+    outputFilename = "bev_addressesEPSG{}.{}".format(args.epsg, args.output_format)
 
     # get the total file size for status output
     total_addresses = sum(1 for row in open('ADRESSE.csv', 'r'))
@@ -301,11 +387,11 @@ if __name__ == '__main__':
             address = {
                 "gemeinde": districts[reader_row["GKZ"]],
                 "ortschaft": localities[reader_row["OKZ"]],
-                "plz": reader_row["PLZ"],
+                "plz": str(reader_row["PLZ"]),
                 "strasse": streets[reader_row["SKZ"]][0],
                 "strassenzusatz": streets[reader_row["SKZ"]][1],
                 "hausnrtext": reader_row["HAUSNRTEXT"],
-                "hausnummer": buildHausNumber(
+                "hausnummer": build_housenumber(
                     reader_row["HAUSNRZAHL1"], 
                     reader_row["HAUSNRBUCHSTABE1"],
                     reader_row["HAUSNRVERBINDUNG1"],
@@ -343,7 +429,7 @@ if __name__ == '__main__':
                 coords = reproject(buildingrow["EPSG"], [x, y])
                 if coords[0] == '0' or coords[1] == '0':
                     continue
-                subaddress = buildSubHouseNumber(
+                subaddress = build_sub_housenumber(
                     buildingrow["HAUSNRZAHL3"],
                     buildingrow["HAUSNRBUCHSTABE3"],
                     buildingrow["HAUSNRVERBINDUNG2"],
@@ -361,9 +447,10 @@ if __name__ == '__main__':
         output = sorted(addresses.values(), key=lambda var: var[args.sort])
     else:
         output = addresses.values()
-    #addressWriter = csv.DictWriter(open(outputFilename, 'w'), output_header_row, extrasaction="ignore", delimiter=";", quotechar='"')
-    addressWriter = csv.DictWriter(open(outputFilename, 'w'), output_header_row, delimiter=";", quotechar='"')
-    addressWriter.writeheader()
+    if args.output_format == "osm":
+        output_writer = OsmWriter()
+    else:
+        output_writer = CsvWriter(outputFilename, output_header_row)
     num_addresses_without_buildings = 0
     num_addresses_with_one_building = 0
     num_addresses_with_more_buildings = 0
@@ -381,7 +468,7 @@ if __name__ == '__main__':
                 if args.compatibility_mode:
                     row["haus_x"] = row["adress_x"]
                     row["haus_y"] = row["adress_y"]
-                addressWriter.writerow(row)
+                output_writer.add_address(row)
                 continue
             elif len(address_buildings) == 1:
                 num_addresses_with_one_building += 1
@@ -392,7 +479,7 @@ if __name__ == '__main__':
                 if args.compatibility_mode:
                     row["haus_x"] = row["adress_x"]
                     row["haus_y"] = row["adress_y"]
-                    addressWriter.writerow(row)
+                    output_writer.add_address(row)
                     continue
 
             for building_info in address_buildings:
@@ -410,13 +497,14 @@ if __name__ == '__main__':
                         num_single_building_with_subadress += 1
                     else:
                         num_building_with_subadress += 1
-                addressWriter.writerow(row)
+                output_writer.add_address(row)
 
+    output_writer.close()
     print("\nfinished")
     print( time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()) )
 
-    print("{:,} addresses without buildings".format(num_addresses_without_buildings))
-    print("{:,} addresses with exactly one building".format(num_addresses_with_one_building))
-    print("from which {:,} buildings have a subaddress and {:,} buildings don't".format(num_single_building_with_subadress, num_single_building_without_subadress))
-    print("{:,} addresses with more than one building".format(num_addresses_with_more_buildings))
-    print("from which {:,} buildings have a subaddress and {:,} buildings don't".format(num_building_with_subadress, num_building_without_subadress))
+    # print("{:,} addresses without buildings".format(num_addresses_without_buildings))
+    # print("{:,} addresses with exactly one building".format(num_addresses_with_one_building))
+    # print("from which {:,} buildings have a subaddress and {:,} buildings don't".format(num_single_building_with_subadress, num_single_building_without_subadress))
+    # print("{:,} addresses with more than one building".format(num_addresses_with_more_buildings))
+    # print("from which {:,} buildings have a subaddress and {:,} buildings don't".format(num_building_with_subadress, num_building_without_subadress))
