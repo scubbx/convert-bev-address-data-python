@@ -153,12 +153,15 @@ class OsmWriter():
                     ortschaft = ortschaft[:index_comma]
                 ET.SubElement(node, "tag", k="addr:city", v=ortschaft)
         ET.SubElement(node, "tag", k="addr:housenumber", v=address["hausnummer"])
-        if "hausname" in address and address["hausname"].strip() != "":
-            ET.SubElement(node, "tag", k="addr:housename", v=address["hausname"])
         if "subadresse" in address and address["subadresse"].strip() != "":
             ET.SubElement(node, "tag", k="addr:unit", v=address["subadresse"])
+        notes = []
         if "haus_bez" in address and address["haus_bez"].strip() != "":
-            ET.SubElement(node, "tag", k="note", v=address["haus_bez"])
+            notes.append(address["haus_bez"])
+        if "hausname" in address and address["hausname"].strip() != "":
+            notes.append(address["hausname"])
+        if len(notes) > 0:
+            ET.SubElement(node, "tag", k="note", v=";".join(notes))
 
     def close(self):
         tree = ET.ElementTree(self.root)
