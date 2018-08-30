@@ -29,6 +29,7 @@ except ImportError:
     print("- no module named requests, automatic download of data is deactivated\n")
 import os.path
 import xml.etree.cElementTree as ET
+import operator
 import zipfile
 try:
     from osgeo import osr
@@ -54,7 +55,7 @@ parser = argparse.ArgumentParser(prog='python3 convert-addresses.py')
 parser.add_argument('-epsg', type=int, default=3035, dest='epsg',
                     help='Specify the EPSG code of the coordinate  system used for the results. If none is given, this value defaults to EPSG:3035')
 parser.add_argument('-sort', default=None, dest='sort',
-                    help='Specify if and by which field the output should be sorted (possible values: gemeinde, plz, strasse, nummer, hausname, x, y, gkz).')
+                    help='Specify if and by which fields the output should be sorted (possible values: gemeinde, plz, strasse, nummer, hausname, x, y, gkz).')
 parser.add_argument('-compatibility_mode', action='store_true', dest='compatibility_mode',
                     help='''Compatiblity mode for bev-reverse-geocoder with only one entry per address. In case of addresses with exactly one building, 
                         the building position is taken, otherwise the address position (more precisely the building position replaces the column, 
@@ -65,7 +66,7 @@ args = parser.parse_args()
 
 if args.output_format == 'osm':
     args.epsg = 4326
-    args.sort = 'plz'
+    args.sort = 'plz,ortschaft,gemeinde'
     args.compatibility_mode = False
 
 # the target EPSG is set according to the argument
@@ -323,10 +324,10 @@ if __name__ == '__main__':
 
     output_header_row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'strassenzusatz', 'hausnrtext', 'hausnummer', 'hausname', 'haus_x', 'haus_y', 'gkz', 'adress_x', 'adress_y', 'subadresse', 'haus_bez', 'adrcd']
     if args.sort != None:
-        if args.sort not in output_header_row:
-            print("\n##### ERROR ##### \nSort parameter is not allowed. Use one of %s" % output_header_row)
-            quit()
-        #args.sort = output_header_row.index(args.sort)
+        for s in args.sort.split(","):
+            if s not in output_header_row:
+                print("\n##### ERROR ##### \nSort parameter is not allowed. Use one (or mulitple separated by ',') of %s" % output_header_row)
+                quit()
 
     print("buffering localities ...")
     try:
@@ -447,7 +448,7 @@ if __name__ == '__main__':
 
     if args.sort != None:
         print("\nsorting output ...")
-        output = sorted(addresses.values(), key=lambda var: var[args.sort])
+        output = sorted(addresses.values(), key= operator.itemgetter(*args.sort.split(",")))
     else:
         output = addresses.values()
     if args.output_format == "osm":
