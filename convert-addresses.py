@@ -120,11 +120,11 @@ class OsmWriter():
                 return "%d-%02d-%02d" % f.date_time[:3]
 
     def add_address(self, address):
-        if self._current_locality != address["ortschaft"] or self._current_postcode != address["plz"]:
+        if self._current_locality != address["ortschaft"].lower() or self._current_postcode != address["plz"]:
             if self.root != None:
                 self.close()
             self._current_postcode = address["plz"]
-            self._current_locality = address["ortschaft"]
+            self._current_locality = address["ortschaft"].lower()
             self.root = ET.Element("osm", version="0.6", generator="convert-addresses.py", upload="never")
         if "haus_x" in address and str(address["haus_x"]).strip() != "":
             node = ET.SubElement(self.root, "node", id=self._get_next_id(), lat=str(address["haus_y"]), lon=str(address["haus_x"]))
@@ -171,7 +171,7 @@ class OsmWriter():
         directory = "%sxxx" % self._current_postcode[0]
         if not os.path.isdir(directory):
             os.makedirs(directory)
-        self.output_filename = "%s %s.osm" % (self._current_postcode, "".join(c for c in self._current_locality if c.isalnum()))
+        self.output_filename = "%s_%s.osm" % (self._current_postcode, "".join(c for c in self._current_locality if c.isalnum()))
         tree.write(os.path.join(directory, self.output_filename), encoding="utf-8", xml_declaration=True)
 
     def _get_next_id(self):
