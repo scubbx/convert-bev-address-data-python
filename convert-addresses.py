@@ -390,28 +390,32 @@ if __name__ == '__main__':
                 continue
             
             address_id = reader_row["ADRCD"]
-            address = {
-                "gemeinde": districts[reader_row["GKZ"]],
-                "ortschaft": localities[reader_row["OKZ"]],
-                "plz": str(reader_row["PLZ"]),
-                "strasse": streets[reader_row["SKZ"]][0],
-                "strassenzusatz": streets[reader_row["SKZ"]][1],
-                "hausnrtext": reader_row["HAUSNRTEXT"],
-                "hausnummer": build_housenumber(
-                    reader_row["HAUSNRZAHL1"], 
-                    reader_row["HAUSNRBUCHSTABE1"],
-                    reader_row["HAUSNRVERBINDUNG1"],
-                    reader_row["HAUSNRZAHL2"],
-                    reader_row["HAUSNRBUCHSTABE2"],
-                    reader_row["HAUSNRBEREICH"]),
-                "hausname": reader_row["HOFNAME"],
-                "gkz": reader_row["GKZ"],
-                "adress_x": coords[0],
-                "adress_y": coords[1],
-                "adrcd": address_id,
-            }
-            addresses[address_id] = address
-            buildings[address_id] = []
+            try:
+                address = {
+                    "gemeinde": districts[reader_row["GKZ"]],
+                    "ortschaft": localities[reader_row["OKZ"]],
+                    "plz": str(reader_row["PLZ"]),
+                    "strasse": streets[reader_row["SKZ"]][0],
+                    "strassenzusatz": streets[reader_row["SKZ"]][1],
+                    "hausnrtext": reader_row["HAUSNRTEXT"],
+                    "hausnummer": build_housenumber(
+                        reader_row["HAUSNRZAHL1"], 
+                        reader_row["HAUSNRBUCHSTABE1"],
+                        reader_row["HAUSNRVERBINDUNG1"],
+                        reader_row["HAUSNRZAHL2"],
+                        reader_row["HAUSNRBUCHSTABE2"],
+                        reader_row["HAUSNRBEREICH"]),
+                    "hausname": reader_row["HOFNAME"],
+                    "gkz": reader_row["GKZ"],
+                    "adress_x": coords[0],
+                    "adress_y": coords[1],
+                    "adrcd": address_id,
+                }
+                addresses[address_id] = address
+                buildings[address_id] = []
+            except KeyError:
+                # ignore incomplete input files
+                pass
 
     try:
         buildingReader = csv.DictReader(open('GEBAEUDE.csv', 'r', encoding='UTF-8-sig'), delimiter=';', quotechar='"')
@@ -422,7 +426,7 @@ if __name__ == '__main__':
     total_buildings = sum(1 for row in open('GEBAEUDE.csv', 'r'))
     with ProgressBar("processing buildings ...") as pb:
         for i, buildingrow in enumerate(buildingReader):
-            current_percentage = float(i) / total_addresses * 100
+            current_percentage = float(i) / total_buildings * 100
             pb.update(current_percentage)
             if buildingrow["HAUPTADRESSE"] != "1":
                 continue
