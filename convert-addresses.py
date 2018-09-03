@@ -66,7 +66,7 @@ args = parser.parse_args()
 
 if args.output_format == 'osm':
     args.epsg = 4326
-    args.sort = 'plz,ortschaft'
+    args.sort = 'plz,ortschaft,adrcd'
     args.compatibility_mode = False
 
 # the target EPSG is set according to the argument
@@ -127,9 +127,9 @@ class OsmWriter():
             self._current_locality = address["ortschaft"].lower()
             self.root = ET.Element("osm", version="0.6", generator="convert-addresses.py", upload="never")
         if "haus_x" in address and str(address["haus_x"]).strip() != "":
-            node = ET.SubElement(self.root, "node", id=self._get_next_id(), lat=str(address["haus_y"]), lon=str(address["haus_x"]))
+            node = ET.SubElement(self.root, "node", id=self._get_id(address), lat=str(address["haus_y"]), lon=str(address["haus_x"]))
         else:
-            node = ET.SubElement(self.root, "node", id=self._get_next_id(), lat=str(address["adress_y"]), lon=str(address["adress_x"]))
+            node = ET.SubElement(self.root, "node", id=self._get_id(address), lat=str(address["adress_y"]), lon=str(address["adress_x"]))
         ET.SubElement(node, "tag", k="addr:country", v="AT")
         ET.SubElement(node, "tag", k="at_bev:addr_date", v=self._bev_date)
         
@@ -167,16 +167,21 @@ class OsmWriter():
             ET.SubElement(node, "tag", k="note", v=";".join(notes))
 
     def close(self):
+        self._format()
         tree = ET.ElementTree(self.root)
-        directory = "%sxxx" % self._current_postcode[0]
+        directory = "%s/%sxxx" % (self._bev_date, self._current_postcode[0])
         if not os.path.isdir(directory):
             os.makedirs(directory)
         self.output_filename = "%s_%s.osm" % (self._current_postcode, "".join(c for c in self._current_locality if c.isalnum()))
         tree.write(os.path.join(directory, self.output_filename), encoding="utf-8", xml_declaration=True)
 
-    def _get_next_id(self):
-        self._current_id -= 1
-        return str(self._current_id)
+    def _format(self):
+        self.root.text = "\n"
+        for node in self.root.getchildren():
+            node.tail = "\n"
+
+    def _get_id(self, address):
+        return "-%s%s" % (address["adrcd"], address["subcd"])
 
 class ProgressBar():
     def __init__(self, message=None):
@@ -324,7 +329,7 @@ if __name__ == '__main__':
         print("There was an error")
         quit()
 
-    output_header_row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'strassenzusatz', 'hausnrtext', 'hausnummer', 'hausname', 'haus_x', 'haus_y', 'gkz', 'adress_x', 'adress_y', 'subadresse', 'haus_bez', 'adrcd']
+    output_header_row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'strassenzusatz', 'hausnrtext', 'hausnummer', 'hausname', 'haus_x', 'haus_y', 'gkz', 'adress_x', 'adress_y', 'subadresse', 'haus_bez', 'adrcd', 'subcd']
     if args.sort != None:
         for s in args.sort.split(","):
             if s not in output_header_row:
@@ -450,6 +455,7 @@ if __name__ == '__main__':
                 building_info = coords
                 building_info.append(subaddress)
                 building_info.append(buildingrow["HAUSNRGEBAEUDEBEZ"])
+                building_info.append(buildingrow["SUBCD"])
                 buildings[address_id].append(building_info)
 
     if args.sort != None:
@@ -473,6 +479,7 @@ if __name__ == '__main__':
             current_percentage = float(i) / len(output) * 100
             pb.update(current_percentage)
             address_buildings = buildings[row["adrcd"]]
+            row["subcd"] = "000"
             if len(address_buildings) == 0:
                 num_addresses_without_buildings += 1
                 if args.compatibility_mode:
@@ -497,6 +504,7 @@ if __name__ == '__main__':
                 row["haus_y"] = building_info[1]
                 row["subadresse"] = building_info[2]
                 row["haus_bez"] = building_info[3]
+                row["subcd"] = building_info[4]
                 if row["subadresse"] == "":
                     if single_building:
                         num_single_building_without_subadress += 1
