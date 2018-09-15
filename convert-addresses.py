@@ -112,6 +112,10 @@ class OsmWriter():
         self._current_locality = None
         self.root = None
         self._bev_date = self._get_addr_date()
+        self._min_lat = None
+        self._max_lat = None
+        self._min_lon = None
+        self._max_lon = None
 
     def _get_addr_date(self):
         z = zipfile.ZipFile('Adresse_Relationale_Tabellen-Stichtagsdaten.zip', 'r')
@@ -127,9 +131,26 @@ class OsmWriter():
             self._current_locality = address["ortschaft"].lower()
             self.root = ET.Element("osm", version="0.6", generator="convert-addresses.py", upload="never")
         if "haus_x" in address and str(address["haus_x"]).strip() != "":
-            node = ET.SubElement(self.root, "node", id=self._get_id(address), lat=str(address["haus_y"]), lon=str(address["haus_x"]))
+            lat = float(address["haus_y"])
+            lon = float(address["haus_x"])
         else:
-            node = ET.SubElement(self.root, "node", id=self._get_id(address), lat=str(address["adress_y"]), lon=str(address["adress_x"]))
+            lat = float(address["adress_y"])
+            lon = float(address["adress_x"])
+        if self._min_lat is None:
+            self._min_lat = lat
+            self._max_lat = lat
+            self._min_lon = lon
+            self._max_lon = lon
+        else:
+            if lat < self._min_lat:
+                self._min_lat = lat
+            elif lat > self._max_lat:
+                self._max_lat = lat
+            if lon < self._min_lon:
+                self._min_lon = lon
+            elif lon > self._max_lon:
+                self._max_lon = lon
+        node = ET.SubElement(self.root, "node", id=self._get_id(address), lat=str(lat), lon=str(lon))
         ET.SubElement(node, "tag", k="addr:country", v="AT")
         ET.SubElement(node, "tag", k="at_bev:addr_date", v=self._bev_date)
         
@@ -167,6 +188,11 @@ class OsmWriter():
             ET.SubElement(node, "tag", k="note", v=";".join(notes))
 
     def close(self):
+        ET.SubElement(self.root, "bounds", minlat=str(self._min_lat), minlon=str(self._min_lon), maxlat=str(self._max_lat), maxlon=str(self._max_lon))
+        self._min_lat = None
+        self._max_lat = None
+        self._min_lon = None
+        self._max_lon = None
         self._format()
         tree = ET.ElementTree(self.root)
         directory = "%s/%sxxx" % (self._bev_date, self._current_postcode[0])
