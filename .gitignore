@@ -1,3 +1,5 @@
 /.idea
 /Adresse_Relationale_Tabellen-Stichtagsdaten.zip
 /*.csv
+/results/
+/.vscode

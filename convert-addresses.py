@@ -96,7 +96,10 @@ else:
 
 class CsvWriter():
     def __init__(self, output_filename, header_row):
-        self.address_writer = csv.DictWriter(open(output_filename, 'w'), header_row, delimiter=";", quotechar='"')
+        directory = "results/"
+        if not os.path.isdir(directory):
+            os.makedirs(directory)
+        self.address_writer = csv.DictWriter(open(os.path.join(directory, output_filename), 'w'), header_row, delimiter=";", quotechar='"')
         self.address_writer.writeheader()
 
     def add_address(self, address):
@@ -110,6 +113,7 @@ class OsmWriter():
         self._current_id = 0
         self._current_postcode = None
         self._current_locality = None
+        self._current_district = None
         self.root = None
         self._bev_date = self._get_addr_date()
         self._min_lat = None
@@ -129,6 +133,7 @@ class OsmWriter():
                 self.close()
             self._current_postcode = address["plz"]
             self._current_locality = address["ortschaft"].lower()
+            self._current_district = address["gemeinde"].lower()
             self.root = ET.Element("osm", version="0.6", generator="convert-addresses.py", upload="never")
         if "haus_x" in address and str(address["haus_x"]).strip() != "":
             lat = float(address["haus_y"])
@@ -195,10 +200,14 @@ class OsmWriter():
         self._max_lon = None
         self._format()
         tree = ET.ElementTree(self.root)
-        directory = "%s/%sxxx" % (self._bev_date, self._current_postcode[0])
+        directory = "results/%s/%sxxx" % (self._bev_date, self._current_postcode[0])
         if not os.path.isdir(directory):
             os.makedirs(directory)
-        self.output_filename = "%s_%s.osm" % (self._current_postcode, "".join(c for c in self._current_locality if c.isalnum()))
+        self.output_filename = "%s_%s_(%s).osm" % (
+            self._current_postcode, 
+            "".join(c for c in self._current_locality if c.isalnum()),
+            "".join(c for c in self._current_district if c.isalnum())
+        )
         tree.write(os.path.join(directory, self.output_filename), encoding="utf-8", xml_declaration=True)
 
     def _format(self):
