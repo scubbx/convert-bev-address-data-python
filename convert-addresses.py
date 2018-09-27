@@ -62,6 +62,8 @@ parser.add_argument('-compatibility_mode', action='store_true', dest='compatibil
                         where bev-reverse-geocoder expected the former single position and in case of no/multiple buildings it's set equal to the address location).''')
 parser.add_argument('-output_format', default='csv', dest='output_format',
                     help='''Specify the output format. Either csv (default) or osm. If osm is chosen, all other arguments are ignored.''')
+parser.add_argument('-here_be_dragons', action='store_true', dest='here_be_dragons',
+                    help='''Include entries that would otherwise be filtered because they are most likely unimportant or even downright false.''')
 args = parser.parse_args()
 
 if args.output_format == 'osm':
@@ -203,7 +205,12 @@ class OsmWriter():
         directory = "results/%s/%sxxx" % (self._bev_date, self._current_postcode[0])
         if not os.path.isdir(directory):
             os.makedirs(directory)
-        self.output_filename = "%s_%s_(%s).osm" % (
+        if args.here_be_dragons:
+            prefix = "DRAGONS_"
+        else:
+            prefix = ""
+        self.output_filename = "%s%s_%s_(%s).osm" % (
+            prefix,
             self._current_postcode, 
             "".join(c for c in self._current_locality if c.isalnum()),
             "".join(c for c in self._current_district if c.isalnum())
@@ -430,6 +437,17 @@ if __name__ == '__main__':
                 continue
             
             address_id = reader_row["ADRCD"]
+            housenumber = build_housenumber(reader_row["HAUSNRZAHL1"], 
+                        reader_row["HAUSNRBUCHSTABE1"],
+                        reader_row["HAUSNRVERBINDUNG1"],
+                        reader_row["HAUSNRZAHL2"],
+                        reader_row["HAUSNRBUCHSTABE2"],
+                        reader_row["HAUSNRBEREICH"])
+            # some entries don't have a housenumber: ignore these entries
+            if housenumber == '':
+                continue
+            elif not any(char.isdigit() for char in housenumber) and not args.here_be_dragons:
+                continue
             try:
                 address = {
                     "gemeinde": districts[reader_row["GKZ"]],
@@ -438,13 +456,7 @@ if __name__ == '__main__':
                     "strasse": streets[reader_row["SKZ"]][0],
                     "strassenzusatz": streets[reader_row["SKZ"]][1],
                     "hausnrtext": reader_row["HAUSNRTEXT"],
-                    "hausnummer": build_housenumber(
-                        reader_row["HAUSNRZAHL1"], 
-                        reader_row["HAUSNRBUCHSTABE1"],
-                        reader_row["HAUSNRVERBINDUNG1"],
-                        reader_row["HAUSNRZAHL2"],
-                        reader_row["HAUSNRBUCHSTABE2"],
-                        reader_row["HAUSNRBEREICH"]),
+                    "hausnummer": housenumber,
                     "hausname": reader_row["HOFNAME"],
                     "gkz": reader_row["GKZ"],
                     "adress_x": coords[0],
@@ -509,6 +521,9 @@ if __name__ == '__main__':
     num_building_with_subadress = 0
     num_single_building_without_subadress = 0
     num_single_building_with_subadress = 0
+    num_addresses_with_mixed_subaddresses = 0
+    num_addresses_with_only_subaddresses = 0
+    num_addresses_with_buildings_without_subaddresses = 0
     with ProgressBar("writing output ...") as pb:
         for i, row in enumerate(output):
             current_percentage = float(i) / len(output) * 100
@@ -525,10 +540,30 @@ if __name__ == '__main__':
             elif len(address_buildings) == 1:
                 num_addresses_with_one_building += 1
                 single_building = True
+                if building_info[3] == "Wohnhaus":
+                    building_info[3] = ""
             else:
                 num_addresses_with_more_buildings += 1
                 single_building = False
-                if args.compatibility_mode:
+                has_building_without_subaddress = False
+                has_building_with_subaddress = False
+                for building_info in address_buildings:
+                    if building_info[2] == "":
+                        has_building_without_subaddress = True
+                    else:
+                        has_building_with_subaddress = True
+                if has_building_with_subaddress:
+                    if has_building_without_subaddress:
+                        num_addresses_with_mixed_subaddresses += 1
+                    else:
+                        num_addresses_with_only_subaddresses += 1
+                else:
+                    num_addresses_with_buildings_without_subaddresses += 1
+                if args.compatibility_mode or (
+                    has_building_without_subaddress and 
+                    not has_building_with_subaddress and
+                    not args.here_be_dragons):
+
                     row["haus_x"] = row["adress_x"]
                     row["haus_y"] = row["adress_y"]
                     output_writer.add_address(row)
@@ -556,8 +591,11 @@ if __name__ == '__main__':
     print("\nfinished")
     print( time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()) )
 
-    # print("{:,} addresses without buildings".format(num_addresses_without_buildings))
-    # print("{:,} addresses with exactly one building".format(num_addresses_with_one_building))
-    # print("from which {:,} buildings have a subaddress and {:,} buildings don't".format(num_single_building_with_subadress, num_single_building_without_subadress))
-    # print("{:,} addresses with more than one building".format(num_addresses_with_more_buildings))
-    # print("from which {:,} buildings have a subaddress and {:,} buildings don't".format(num_building_with_subadress, num_building_without_subadress))
+    print("{:,} addresses without buildings".format(num_addresses_without_buildings))
+    print("{:,} addresses with exactly one building".format(num_addresses_with_one_building))
+    print("from which {:,} buildings have a subaddress and {:,} buildings don't".format(num_single_building_with_subadress, num_single_building_without_subadress))
+    print("{:,} addresses with more than one building".format(num_addresses_with_more_buildings))
+    print("from which {:,} buildings have a subaddress and {:,} buildings don't".format(num_building_with_subadress, num_building_without_subadress))
+    print("{:,} addresses where all buildings have subaddresses".format(num_addresses_with_only_subaddresses))
+    print("{:,} addresses where no buildings have subaddresses".format(num_addresses_with_buildings_without_subaddresses))
+    print("{:,} addresses that have both, buildings with and without subaddresses".format(num_addresses_with_mixed_subaddresses))
