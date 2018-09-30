@@ -17,6 +17,7 @@ osgeoModule = False
 pyprojModule = False
 arcpyModule = False
 
+from collections import defaultdict
 import time
 print( time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()) )
 import sys
@@ -162,27 +163,19 @@ class OsmWriter():
         ET.SubElement(node, "tag", k="at_bev:addr_date", v=self._bev_date)
         
         ET.SubElement(node, "tag", k="addr:postcode", v=address["plz"])
+        streetname = address["strasse"]
+        if streetname.lower().endswith("str."):
+            streetname = streetname[:-1] + "aße"
+        elif streetname.lower().endswith("g."):
+            streetname = streetname[:-1] + "asse"
         if address["strasse"] == address["ortschaft"]:
-            ET.SubElement(node, "tag", k="addr:place", v=address["strasse"])
-            ET.SubElement(node, "tag", k="addr:city", v=address["gemeinde"])
+            ET.SubElement(node, "tag", k="addr:place", v=streetname)
         else:
-            ET.SubElement(node, "tag", k="addr:street", v=address["strasse"])
-            ortschaft = address["ortschaft"]
-            if address["gemeinde"] in ("Innsbruck", "Wels", "Leoben"):
-                ET.SubElement(node, "tag", k="addr:city", v=address["gemeinde"])
-                ET.SubElement(node, "tag", k="addr:suburb", v=ortschaft)
-            elif ortschaft.startswith("Villach"):
-                ET.SubElement(node, "tag", k="addr:city", v="Villach")
-                ET.SubElement(node, "tag", k="addr:suburb", v=ortschaft[8:])
-            else:
-                index_comma = ortschaft.find(",")
-                if index_comma > -1:
-                    if ortschaft.startswith("Wien"):
-                        ET.SubElement(node, "tag", k="addr:suburb", v=ortschaft[index_comma+1:])
-                    elif ortschaft.startswith("Graz") or ortschaft.startswith("Klagenfurt"):
-                        ET.SubElement(node, "tag", k="addr:suburb", v=ortschaft[index_comma+9:])
-                    ortschaft = ortschaft[:index_comma]
-                ET.SubElement(node, "tag", k="addr:city", v=ortschaft)
+            ET.SubElement(node, "tag", k="addr:street", v=streetname)
+        if GKZ_IS_AMBIGUOUS[address["gkz"]]:
+            ET.SubElement(node, "tag", k="addr:city", v=address["ortschaft"])
+        else:
+            ET.SubElement(node, "tag", k="addr:city", v=address["gemeinde"])
         ET.SubElement(node, "tag", k="addr:housenumber", v=address["hausnummer"])
         if "subadresse" in address and address["subadresse"].strip() != "":
             ET.SubElement(node, "tag", k="addr:unit", v=address["subadresse"])
@@ -362,6 +355,13 @@ def preparations():
                 myzip.extract(csv)
     return True
 
+''' strips whitespace/dash, ß->ss, ignore case '''
+def normalize_streetname(street):
+    s = street.replace("ß", "ss").replace(" ", "").replace("-", "").lower()
+    if s.endswith("str.") or s.endswith("g."):
+        s = s[:-1] + "asse"
+    return s
+
 if __name__ == '__main__':
     print('#' * 40)
     print(info)
@@ -396,8 +396,17 @@ if __name__ == '__main__':
         print("\n##### ERROR ##### \nThe file 'STRASSE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
         quit()
     streets = {}
+    gkz_streets = defaultdict(list)
+    GKZ_IS_AMBIGUOUS = defaultdict(bool)
     for streetrow in streetReader:
-        streets[streetrow['SKZ']] = [streetrow['STRASSENNAME'].strip(), streetrow['STRASSENNAMENZUSATZ']]
+        streetname = streetrow['STRASSENNAME'].strip()
+        streets[streetrow['SKZ']] = [streetname, streetrow['STRASSENNAMENZUSATZ']]
+        gkz = streetrow['GKZ']
+        if normalize_streetname(streetname) in gkz_streets[gkz]:
+            GKZ_IS_AMBIGUOUS[gkz] = True
+        else:
+            gkz_streets[gkz].append(normalize_streetname(streetname))
+    print("ambiguous GKZ: ", len(GKZ_IS_AMBIGUOUS))
 
     print("buffering districts ...")
     try:
@@ -408,6 +417,7 @@ if __name__ == '__main__':
     districts = {}
     for districtrow in districtReader:
         districts[districtrow['GKZ']] = districtrow['GEMEINDENAME']
+    print("GKZ overall: ", len(districts))
 
     try:
         addressReader = csv.DictReader(open('ADRESSE.csv', 'r', encoding='UTF-8-sig'), delimiter=';', quotechar='"')
