@@ -168,12 +168,20 @@ class OsmWriter():
             streetname = streetname[:-1] + "aße"
         elif streetname.lower().endswith("g."):
             streetname = streetname[:-1] + "asse"
-        if address["strasse"] == address["ortschaft"]:
+        ortschaft = address["ortschaft"]
+        if address["strasse"] == ortschaft:
             ET.SubElement(node, "tag", k="addr:place", v=streetname)
         else:
             ET.SubElement(node, "tag", k="addr:street", v=streetname)
+        index_comma = ortschaft.find(",")
+        if index_comma > -1:
+            if ortschaft.startswith("Wien"):
+                ET.SubElement(node, "tag", k="addr:suburb", v=ortschaft[index_comma+1:])
+            elif ortschaft.startswith("Graz") or ortschaft.startswith("Klagenfurt"):
+                ET.SubElement(node, "tag", k="addr:suburb", v=ortschaft[index_comma+9:])
+            ortschaft = ortschaft[:index_comma]
         if GKZ_IS_AMBIGUOUS[address["gkz"]]:
-            ET.SubElement(node, "tag", k="addr:city", v=address["ortschaft"])
+            ET.SubElement(node, "tag", k="addr:city", v=ortschaft)
         else:
             ET.SubElement(node, "tag", k="addr:city", v=address["gemeinde"])
         ET.SubElement(node, "tag", k="addr:housenumber", v=address["hausnummer"])
@@ -389,6 +397,17 @@ if __name__ == '__main__':
     for localityrow in localityReader:
         localities[localityrow['OKZ']] = localityrow['ORTSNAME']
 
+    print("buffering districts ...")
+    try:
+        districtReader = csv.DictReader(open('GEMEINDE.csv', 'r', encoding='UTF-8-sig'), delimiter=';', quotechar='"')
+    except IOError:
+        print("\n##### ERROR ##### \nThe file 'GEMEINDE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
+        quit()
+    districts = {}
+    for districtrow in districtReader:
+        districts[districtrow['GKZ']] = districtrow['GEMEINDENAME']
+    print("GKZ overall: ", len(districts))
+
     print("buffering streets ...")
     try:
         streetReader = csv.DictReader(open('STRASSE.csv', 'r', encoding='UTF-8-sig'), delimiter=';', quotechar='"')
@@ -407,17 +426,6 @@ if __name__ == '__main__':
         else:
             gkz_streets[gkz].append(normalize_streetname(streetname))
     print("ambiguous GKZ: ", len(GKZ_IS_AMBIGUOUS))
-
-    print("buffering districts ...")
-    try:
-        districtReader = csv.DictReader(open('GEMEINDE.csv', 'r', encoding='UTF-8-sig'), delimiter=';', quotechar='"')
-    except IOError:
-        print("\n##### ERROR ##### \nThe file 'GEMEINDE.csv' was not found. Please download and unpack the BEV Address data from http://www.bev.gv.at/portal/page?_pageid=713,1604469&_dad=portal&_schema=PORTAL")
-        quit()
-    districts = {}
-    for districtrow in districtReader:
-        districts[districtrow['GKZ']] = districtrow['GEMEINDENAME']
-    print("GKZ overall: ", len(districts))
 
     try:
         addressReader = csv.DictReader(open('ADRESSE.csv', 'r', encoding='UTF-8-sig'), delimiter=';', quotechar='"')
