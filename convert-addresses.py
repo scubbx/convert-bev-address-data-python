@@ -166,8 +166,6 @@ class OsmWriter():
         streetname = address["strasse"]
         if streetname.lower().endswith("str."):
             streetname = streetname[:-1] + "aße"
-        elif streetname.lower().endswith("g."):
-            streetname = streetname[:-1] + "asse"
         ortschaft = address["ortschaft"]
         if address["strasse"] == ortschaft:
             ET.SubElement(node, "tag", k="addr:place", v=streetname)
@@ -180,10 +178,9 @@ class OsmWriter():
             elif ortschaft.startswith("Graz") or ortschaft.startswith("Klagenfurt"):
                 ET.SubElement(node, "tag", k="addr:suburb", v=ortschaft[index_comma+9:])
             ortschaft = ortschaft[:index_comma]
-        if GKZ_IS_AMBIGUOUS[address["gkz"]]:
-            ET.SubElement(node, "tag", k="addr:city", v=ortschaft)
-        else:
-            ET.SubElement(node, "tag", k="addr:city", v=address["gemeinde"])
+        if address["strassenname_mehrdeutig"]:
+            ET.SubElement(node, "tag", k="addr:suburb", v=ortschaft)
+        ET.SubElement(node, "tag", k="addr:city", v=address["gemeinde"])
         ET.SubElement(node, "tag", k="addr:housenumber", v=address["hausnummer"])
         if "subadresse" in address and address["subadresse"].strip() != "":
             ET.SubElement(node, "tag", k="addr:unit", v=address["subadresse"])
@@ -379,7 +376,7 @@ if __name__ == '__main__':
         print("There was an error")
         quit()
 
-    output_header_row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'strassenzusatz', 'hausnrtext', 'hausnummer', 'hausname', 'haus_x', 'haus_y', 'gkz', 'adress_x', 'adress_y', 'subadresse', 'haus_bez', 'adrcd', 'subcd']
+    output_header_row = ['gemeinde', 'ortschaft', 'plz', 'strasse', 'strassenzusatz', 'hausnrtext', 'hausnummer', 'hausname', 'haus_x', 'haus_y', 'gkz', 'adress_x', 'adress_y', 'subadresse', 'haus_bez', 'adrcd', 'subcd', 'okz', 'strassenname_mehrdeutig']
     if args.sort != None:
         for s in args.sort.split(","):
             if s not in output_header_row:
@@ -416,16 +413,19 @@ if __name__ == '__main__':
         quit()
     streets = {}
     gkz_streets = defaultdict(list)
-    GKZ_IS_AMBIGUOUS = defaultdict(bool)
+    gkz_has_ambiguous_streetnames = defaultdict(bool)
+    ambiguous_streetnames = defaultdict(list)
+    okz_has_ambiguous_streetnames = defaultdict(bool)
     for streetrow in streetReader:
         streetname = streetrow['STRASSENNAME'].strip()
         streets[streetrow['SKZ']] = [streetname, streetrow['STRASSENNAMENZUSATZ']]
         gkz = streetrow['GKZ']
         if normalize_streetname(streetname) in gkz_streets[gkz]:
-            GKZ_IS_AMBIGUOUS[gkz] = True
+            gkz_has_ambiguous_streetnames[gkz] = True
+            ambiguous_streetnames[gkz].append(normalize_streetname(streetname))
         else:
             gkz_streets[gkz].append(normalize_streetname(streetname))
-    print("ambiguous GKZ: ", len(GKZ_IS_AMBIGUOUS))
+    print("GKZ with ambiguous streetnames: ", len(gkz_has_ambiguous_streetnames))
 
     try:
         addressReader = csv.DictReader(open('ADRESSE.csv', 'r', encoding='UTF-8-sig'), delimiter=';', quotechar='"')
@@ -467,11 +467,17 @@ if __name__ == '__main__':
             elif not any(char.isdigit() for char in housenumber) and not args.here_be_dragons:
                 continue
             try:
+                gkz = reader_row["GKZ"]
+                okz = reader_row["OKZ"]
+                street = streets[reader_row["SKZ"]][0]
+                if gkz_has_ambiguous_streetnames[gkz]:
+                    if normalize_streetname(street) in ambiguous_streetnames[gkz]:
+                        okz_has_ambiguous_streetnames[okz] = True
                 address = {
                     "gemeinde": districts[reader_row["GKZ"]],
                     "ortschaft": localities[reader_row["OKZ"]],
                     "plz": str(reader_row["PLZ"]),
-                    "strasse": streets[reader_row["SKZ"]][0],
+                    "strasse": street,
                     "strassenzusatz": streets[reader_row["SKZ"]][1],
                     "hausnrtext": reader_row["HAUSNRTEXT"],
                     "hausnummer": housenumber,
@@ -480,12 +486,15 @@ if __name__ == '__main__':
                     "adress_x": coords[0],
                     "adress_y": coords[1],
                     "adrcd": address_id,
+                    "okz": okz,
+                    "strassenname_mehrdeutig": okz_has_ambiguous_streetnames[okz]
                 }
                 addresses[address_id] = address
                 buildings[address_id] = []
             except KeyError:
                 # ignore incomplete input files
                 pass
+    print("OKZ with ambiguous streetnames: ", len([okz for okz in okz_has_ambiguous_streetnames if okz_has_ambiguous_streetnames[okz] == True]))
 
     try:
         buildingReader = csv.DictReader(open('GEBAEUDE.csv', 'r', encoding='UTF-8-sig'), delimiter=';', quotechar='"')
