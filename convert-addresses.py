@@ -69,7 +69,7 @@ args = parser.parse_args()
 
 if args.output_format == 'osm':
     args.epsg = 4326
-    args.sort = 'plz,ortschaft,adrcd'
+    args.sort = 'plz,ortschaft,strasse,adrcd'
     args.compatibility_mode = False
 
 # the target EPSG is set according to the argument
@@ -117,6 +117,7 @@ class OsmWriter():
         self._current_postcode = None
         self._current_locality = None
         self._current_district = None
+        self._current_street = None
         self.root = None
         self._bev_date = self._get_addr_date()
         self._min_lat = None
@@ -131,13 +132,15 @@ class OsmWriter():
                 return "%d-%02d-%02d" % f.date_time[:3]
 
     def add_address(self, address):
-        if self._current_locality != address["ortschaft"].lower() or self._current_postcode != address["plz"]:
+        #if self._current_locality != address["ortschaft"].lower() or self._current_postcode != address["plz"]:
+        if self._current_street != address["strasse"].lower():
             if self.root != None:
                 self.close()
             self._current_postcode = address["plz"]
             self._current_locality = address["ortschaft"].lower()
             self._current_district = address["gemeinde"].lower()
-            self.root = ET.Element("osm", version="0.6", generator="convert-addresses.py", upload="never")
+            self._current_street = address["strasse"].lower()
+            self.root = ET.Element("osm", version="0.6", generator="convert-addresses.py", upload="never", locked="true")
         if "haus_x" in address and str(address["haus_x"]).strip() != "":
             lat = float(address["haus_y"])
             lon = float(address["haus_x"])
@@ -200,18 +203,21 @@ class OsmWriter():
         self._max_lon = None
         self._format()
         tree = ET.ElementTree(self.root)
-        directory = "results/%s/%sxxx" % (self._bev_date, self._current_postcode[0])
+        district = "".join(c for c in self._current_district if c.isalnum())
+        locality = "".join(c for c in self._current_locality if c.isalnum())
+        directory = "results/%s/%sxxx/%s/%s" % (self._bev_date, self._current_postcode[0], district, locality)
         if not os.path.isdir(directory):
             os.makedirs(directory)
         if args.here_be_dragons:
             prefix = "DRAGONS_"
         else:
             prefix = ""
-        self.output_filename = "%s%s_%s_(%s).osm" % (
+        self.output_filename = "%s%s_%s_%s_(%s).osm" % (
             prefix,
+            "".join(c for c in self._current_street if c.isalnum()),
             self._current_postcode, 
-            "".join(c for c in self._current_locality if c.isalnum()),
-            "".join(c for c in self._current_district if c.isalnum())
+            locality,
+            district
         )
         tree.write(os.path.join(directory, self.output_filename), encoding="utf-8", xml_declaration=True)
 
