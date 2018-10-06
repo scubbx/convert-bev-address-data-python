@@ -476,9 +476,11 @@ if __name__ == '__main__':
                 gkz = reader_row["GKZ"]
                 okz = reader_row["OKZ"]
                 street = streets[reader_row["SKZ"]][0]
+                streetname_is_ambiguous = False
                 if gkz_has_ambiguous_streetnames[gkz]:
                     if normalize_streetname(street) in ambiguous_streetnames[gkz]:
                         okz_has_ambiguous_streetnames[okz] = True
+                        streetname_is_ambiguous = True
                 address = {
                     "gemeinde": districts[reader_row["GKZ"]],
                     "ortschaft": localities[reader_row["OKZ"]],
@@ -493,7 +495,7 @@ if __name__ == '__main__':
                     "adress_y": coords[1],
                     "adrcd": address_id,
                     "okz": okz,
-                    "strassenname_mehrdeutig": okz_has_ambiguous_streetnames[okz]
+                    "strassenname_mehrdeutig": streetname_is_ambiguous
                 }
                 addresses[address_id] = address
                 buildings[address_id] = []
