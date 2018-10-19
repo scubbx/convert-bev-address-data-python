@@ -187,13 +187,14 @@ class OsmWriter():
         ET.SubElement(node, "tag", k="addr:housenumber", v=address["hausnummer"])
         if "subadresse" in address and address["subadresse"].strip() != "":
             ET.SubElement(node, "tag", k="addr:unit", v=address["subadresse"])
-        notes = []
-        if "haus_bez" in address and address["haus_bez"].strip() != "":
-            notes.append(address["haus_bez"])
-        if "hausname" in address and address["hausname"].strip() != "":
-            notes.append(address["hausname"])
-        if len(notes) > 0:
-            ET.SubElement(node, "tag", k="note", v=";".join(notes))
+        if args.here_be_dragons:            
+            notes = []
+            if "haus_bez" in address and address["haus_bez"].strip() != "":
+                notes.append(address["haus_bez"])
+            if "hausname" in address and address["hausname"].strip() != "":
+                notes.append(address["hausname"])
+            if len(notes) > 0:
+                ET.SubElement(node, "tag", k="note", v=";".join(notes))
 
     def close(self):
         ET.SubElement(self.root, "bounds", minlat=str(self._min_lat), minlon=str(self._min_lon), maxlat=str(self._max_lat), maxlon=str(self._max_lon))
