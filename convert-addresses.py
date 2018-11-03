@@ -65,11 +65,14 @@ parser.add_argument('-output_format', default='csv', dest='output_format',
                     help='''Specify the output format. Either csv (default) or osm. If osm is chosen, all other arguments are ignored.''')
 parser.add_argument('-here_be_dragons', action='store_true', dest='here_be_dragons',
                     help='''Include entries that would otherwise be filtered because they are most likely unimportant or even downright false.''')
+parser.add_argument('-only_notes', action='store_true', dest='only_notes',
+                    help='''Only output entries that have either a "Hofname" or a "Gebäudebezeichnung"''')
 args = parser.parse_args()
 
 if args.output_format == 'osm':
     args.epsg = 4326
-    args.sort = 'plz,ortschaft,strasse,adrcd'
+    #args.sort = 'plz,ortschaft,strasse,adrcd'
+    args.sort = 'gkz,okz,plz,strasse,adrcd'
     args.compatibility_mode = False
 
 # the target EPSG is set according to the argument
@@ -97,6 +100,138 @@ else:
     arcCenterRef = arcpy.SpatialReference(31255)
     arcEastRef = arcpy.SpatialReference(31256)
 
+BUNDESLAND = {
+    "1": "Burgenland",
+    "2": "Kärnten",
+    "3": "Niederösterreich",
+    "4": "Oberösterreich",
+    "5": "Salzburg",
+    "6": "Steiermark",
+    "7": "Tirol",
+    "8": "Vorarlberg",
+    "9": "Wien"
+}
+
+BEZIRK = {
+    "101": "Eisenstadt-Stadt",
+    "102": "Rust-Stadt",
+    "103": "Eisenstadt-Umgebung",
+    "104": "Güssing",
+    "105": "Jennersdorf",
+    "106": "Mattersburg",
+    "107": "Neusiedl_am_See",
+    "108": "Oberpullendorf",
+    "109": "Oberwart",
+    "201": "Klagenfurt-Stadt",
+    "202": "Villach-Stadt",
+    "203": "Hermagor",
+    "204": "Klagenfurt-Land",
+    "205": "St.Veit_Glan",
+    "206": "Spittal_Drau",
+    "207": "Villach-Land",
+    "208": "Völkermarkt",
+    "209": "Wolfsberg",
+    "210": "Feldkirchen",
+    "301": "Krems-Stadt",
+    "302": "St.Pölten-Stadt",
+    "303": "Waidhofen_Ybbs-Stadt",
+    "304": "Wr.Neustadt-Stadt",
+    "305": "Amstetten",
+    "306": "Baden",
+    "307": "Bruck_Leitha",
+    "308": "Gänserndorf",
+    "309": "Gmünd",
+    "310": "Hollabrunn",
+    "311": "Horn",
+    "312": "Korneuburg",
+    "313": "Krems-Land",
+    "314": "Lilienfeld",
+    "315": "Melk",
+    "316": "Mistelbach",
+    "317": "Mödling",
+    "318": "Neunkirchen",
+    "319": "St.Pölten-Land",
+    "320": "Scheibbs",
+    "321": "Tulln",
+    "322": "Waidhofen_Thaya",
+    "323": "Wr.Neustadt-Land",
+    "325": "Zwettl",
+    "401": "Linz-Stadt",
+    "402": "Stayr-Stadt",
+    "403": "Wels-Stadt",
+    "404": "Braunau_Inn",
+    "405": "Eferding",
+    "406": "Freistadt",
+    "407": "Gmunden",
+    "408": "Grieskirchen",
+    "409": "Kirchdorf_Krems",
+    "410": "Linz-Land",
+    "411": "Perg",
+    "412": "Ried_Innkreis",
+    "413": "Rohrbach",
+    "414": "Schärding",
+    "415": "Steyr-Land",
+    "416": "Urfahr-Umgebung",
+    "417": "Vöcklabruck",
+    "418": "Wels-Land",
+    "501": "Salzburg-Stadt",
+    "502": "Hallein",
+    "503": "Salzburg-Umgebung",
+    "504": "St.Johann_Pongau",
+    "505": "Tamsweg",
+    "506": "Zell_am_See",
+    "601": "Graz-Stadt",
+    "603": "Deutschlandsberg",
+    "606": "Graz-Umgebung",
+    "610": "Leibnitz",
+    "611": "Leoben",
+    "612": "Liezen",
+    "614": "Murau",
+    "616": "Voitsberg",
+    "617": "Weiz",
+    "620": "Murtal",
+    "621": "Bruck-Mürzzuschlag",
+    "622": "Hartberg-Fürstenfeld",
+    "623": "Südoststeiermark",
+    "701": "Innsbruck-Stadt",
+    "702": "Imst",
+    "703": "Innsbruck-Land",
+    "704": "Kitzbühel",
+    "705": "Kufstein",
+    "706": "Landeck",
+    "707": "Lienz",
+    "708": "Reutte",
+    "709": "Schwaz",
+    "801": "Bludenz",
+    "802": "Bregenz",
+    "803": "Dornbirn",
+    "804": "Feldkirch",
+    "900": "Wien-Stadt",
+    "901": "01-Innere_Stadt",
+    "902": "02-Leopoldstadt",
+    "903": "03-Landstraße",
+    "904": "04-Wieden",
+    "905": "05-Margareten",
+    "906": "06-Mariahilf",
+    "907": "07-Neubau",
+    "908": "08-Josefstadt",
+    "909": "09-Alsergrund",
+    "910": "10-Favoriten",
+    "911": "11-Simmering",
+    "912": "12-Meidling",
+    "913": "13-Hietzing",
+    "914": "14-Penzing",
+    "915": "15-Rudolfsheim-Fünfhaus",
+    "916": "16-Ottakring",
+    "917": "17-Hernals",
+    "918": "18-Währing",
+    "919": "19-Döbling",
+    "920": "20-Brigittenau",
+    "921": "21-Floridsdorf",
+    "922": "22-Donaustadt",
+    "923": "23-Liesing"
+}
+
 class CsvWriter():
     def __init__(self, output_filename, header_row):
         directory = "results/"
@@ -115,6 +250,7 @@ class OsmWriter():
     def __init__(self):
         self._current_id = 0
         self._current_postcode = None
+        self._current_gkz = None
         self._current_locality = None
         self._current_district = None
         self._current_street = None
@@ -136,6 +272,7 @@ class OsmWriter():
         if self._current_street != address["strasse"].lower():
             if self.root != None:
                 self.close()
+            self._current_gkz = address["gkz"]
             self._current_postcode = address["plz"]
             self._current_locality = address["ortschaft"].lower()
             self._current_district = address["gemeinde"].lower()
@@ -187,7 +324,7 @@ class OsmWriter():
         ET.SubElement(node, "tag", k="addr:housenumber", v=address["hausnummer"])
         if "subadresse" in address and address["subadresse"].strip() != "":
             ET.SubElement(node, "tag", k="addr:unit", v=address["subadresse"])
-        if args.here_be_dragons:            
+        if args.here_be_dragons or args.only_notes:
             notes = []
             if "haus_bez" in address and address["haus_bez"].strip() != "":
                 notes.append(address["haus_bez"])
@@ -206,11 +343,25 @@ class OsmWriter():
         tree = ET.ElementTree(self.root)
         district = "".join(c for c in self._current_district if c.isalnum())
         locality = "".join(c for c in self._current_locality if c.isalnum())
-        directory = "results/%s/%sxxx/%s/%s" % (self._bev_date, self._current_postcode[0], district, locality)
+        federal_state = BUNDESLAND[self._current_gkz[0]]
+        if federal_state == "Wien":
+            directory = "results/{datum}/{bundesland}/{ortschaft}".format(
+                datum = self._bev_date,
+                bundesland = federal_state,
+                ortschaft = locality)
+        else:
+            directory = "results/{datum}/{bundesland}/Bezirk_{bezirk}/gemeinde_{gemeinde}/{ortschaft}".format(
+                datum = self._bev_date,
+                bundesland = federal_state,
+                bezirk = BEZIRK[self._current_gkz[:3]],
+                gemeinde = district,
+                ortschaft = locality)
         if not os.path.isdir(directory):
             os.makedirs(directory)
         if args.here_be_dragons:
             prefix = "DRAGONS_"
+        elif args.only_notes:
+            prefix = "NOTES_"
         else:
             prefix = ""
         self.output_filename = "%s%s_%s_%s_(%s).osm" % (
@@ -571,7 +722,8 @@ if __name__ == '__main__':
                 if args.compatibility_mode:
                     row["haus_x"] = row["adress_x"]
                     row["haus_y"] = row["adress_y"]
-                output_writer.add_address(row)
+                if args.only_notes == False or row["hausname"] != "":
+                    output_writer.add_address(row)
                 continue
             elif len(address_buildings) == 1:
                 num_addresses_with_one_building += 1
@@ -602,7 +754,8 @@ if __name__ == '__main__':
 
                     row["haus_x"] = row["adress_x"]
                     row["haus_y"] = row["adress_y"]
-                    output_writer.add_address(row)
+                    if args.only_notes == False or row["hausname"] != "":
+                        output_writer.add_address(row)
                     continue
 
             for building_info in address_buildings:
@@ -621,7 +774,8 @@ if __name__ == '__main__':
                         num_single_building_with_subadress += 1
                     else:
                         num_building_with_subadress += 1
-                output_writer.add_address(row)
+                if args.only_notes == False or row["haus_bez"] != "" or row["hausname"] != "":
+                    output_writer.add_address(row)
 
     output_writer.close()
     print("\nfinished")
