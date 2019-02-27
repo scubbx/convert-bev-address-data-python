@@ -62,16 +62,17 @@ parser.add_argument('-compatibility_mode', action='store_true', dest='compatibil
                         the building position is taken, otherwise the address position (more precisely the building position replaces the column, 
                         where bev-reverse-geocoder expected the former single position and in case of no/multiple buildings it's set equal to the address location).''')
 parser.add_argument('-output_format', default='csv', dest='output_format',
-                    help='''Specify the output format. Either csv (default) or osm. If osm is chosen, all other arguments are ignored.''')
+                    help='''Specify the output format. Either csv (default) or osm. If osm is chosen, the arguments above (epsg, sort, compatibility_mode) are ignored.''')
 parser.add_argument('-here_be_dragons', action='store_true', dest='here_be_dragons',
                     help='''Include entries that would otherwise be filtered because they are most likely unimportant or even downright false.''')
 parser.add_argument('-only_notes', action='store_true', dest='only_notes',
                     help='''Only output entries that have either a "Hofname" or a "Gebäudebezeichnung"''')
+parser.add_argument('-debug', action='store_true', dest='debug',
+                    help='''Return ALL coordinates to an address with annotations coded directly into the housenumber''')
 args = parser.parse_args()
 
 if args.output_format == 'osm':
     args.epsg = 4326
-    #args.sort = 'plz,ortschaft,strasse,adrcd'
     args.sort = 'gkz,okz,plz,strasse,adrcd'
     args.compatibility_mode = False
 
@@ -234,9 +235,12 @@ BEZIRK = {
 
 class CsvWriter():
     def __init__(self, output_filename, header_row):
-        directory = "results/"
-        if not os.path.isdir(directory):
-            os.makedirs(directory)
+        if args.compatibility_mode:
+            directory = "./"
+        else:
+            directory = "results/"
+            if not os.path.isdir(directory):
+                os.makedirs(directory)
         self.address_writer = csv.DictWriter(open(os.path.join(directory, output_filename), 'w'), header_row, delimiter=";", quotechar='"')
         self.address_writer.writeheader()
 
@@ -717,46 +721,52 @@ if __name__ == '__main__':
             pb.update(current_percentage)
             address_buildings = buildings[row["adrcd"]]
             row["subcd"] = "000"
-            if len(address_buildings) == 0:
-                num_addresses_without_buildings += 1
-                if args.compatibility_mode:
-                    row["haus_x"] = row["adress_x"]
-                    row["haus_y"] = row["adress_y"]
-                if args.only_notes == False or row["hausname"] != "":
-                    output_writer.add_address(row)
-                continue
-            elif len(address_buildings) == 1:
-                num_addresses_with_one_building += 1
-                single_building = True
-                if building_info[3] == "Wohnhaus":
-                    building_info[3] = ""
+            if args.debug:
+                tmp = row["hausnummer"]
+                row["hausnummer"] += " (Z)"
+                output_writer.add_address(row)
+                row["hausnummer"] = tmp
             else:
-                num_addresses_with_more_buildings += 1
-                single_building = False
-                has_building_without_subaddress = False
-                has_building_with_subaddress = False
-                for building_info in address_buildings:
-                    if building_info[2] == "":
-                        has_building_without_subaddress = True
-                    else:
-                        has_building_with_subaddress = True
-                if has_building_with_subaddress:
-                    if has_building_without_subaddress:
-                        num_addresses_with_mixed_subaddresses += 1
-                    else:
-                        num_addresses_with_only_subaddresses += 1
-                else:
-                    num_addresses_with_buildings_without_subaddresses += 1
-                if args.compatibility_mode or (
-                    has_building_without_subaddress and 
-                    not has_building_with_subaddress and
-                    not args.here_be_dragons):
-
-                    row["haus_x"] = row["adress_x"]
-                    row["haus_y"] = row["adress_y"]
+                if len(address_buildings) == 0:
+                    num_addresses_without_buildings += 1
+                    if args.compatibility_mode:
+                        row["haus_x"] = row["adress_x"]
+                        row["haus_y"] = row["adress_y"]
                     if args.only_notes == False or row["hausname"] != "":
                         output_writer.add_address(row)
                     continue
+                elif len(address_buildings) == 1:
+                    num_addresses_with_one_building += 1
+                    single_building = True
+                    if building_info[3] == "Wohnhaus":
+                        building_info[3] = ""
+                else:
+                    num_addresses_with_more_buildings += 1
+                    single_building = False
+                    has_building_without_subaddress = False
+                    has_building_with_subaddress = False
+                    for building_info in address_buildings:
+                        if building_info[2] == "":
+                            has_building_without_subaddress = True
+                        else:
+                            has_building_with_subaddress = True
+                    if has_building_with_subaddress:
+                        if has_building_without_subaddress:
+                            num_addresses_with_mixed_subaddresses += 1
+                        else:
+                            num_addresses_with_only_subaddresses += 1
+                    else:
+                        num_addresses_with_buildings_without_subaddresses += 1
+                    if args.compatibility_mode or (
+                        has_building_without_subaddress and 
+                        not has_building_with_subaddress and
+                        not args.here_be_dragons):
+
+                        row["haus_x"] = row["adress_x"]
+                        row["haus_y"] = row["adress_y"]
+                        if args.only_notes == False or row["hausname"] != "":
+                            output_writer.add_address(row)
+                        continue
 
             for building_info in address_buildings:
                 row["haus_x"] = building_info[0]
@@ -764,6 +774,14 @@ if __name__ == '__main__':
                 row["subadresse"] = building_info[2]
                 row["haus_bez"] = building_info[3]
                 row["subcd"] = building_info[4]
+                if args.debug:
+                    tmp = row["hausnummer"]
+                    row["hausnummer"] += " (G%d)" % int(row["subcd"])
+                    row["adress_x"] = row["haus_x"]
+                    row["adress_y"] = row["haus_y"]
+                    output_writer.add_address(row)
+                    row["hausnummer"] = tmp
+                    continue
                 if row["subadresse"] == "":
                     if single_building:
                         num_single_building_without_subadress += 1
