@@ -1,5 +1,5 @@
+/.idea
 /Adresse_Relationale_Tabellen-Stichtagsdaten.zip
-/ADRESSE.csv
-/GEMEINDE.csv
-/STRASSE.csv
-/bev_addressesEPSG*.*
+/*.csv
+/results/
+/.vscode
