@@ -413,7 +413,7 @@ def download_data():
     if not requestsModule:
         print("source data missing and download is deactivated")
         quit()
-    addressdataUrl = "http://www.bev.gv.at/pls/portal/docs/PAGE/BEV_PORTAL_CONTENT_ALLGEMEIN/0200_PRODUKTE/UNENTGELTLICHE_PRODUKTE_DES_BEV/Adresse_Relationale_Tabellen-Stichtagsdaten.zip"
+    addressdataUrl = "http://www.bev.gv.at/pls/portal/docs/PAGE/BEV_PORTAL_CONTENT_ALLGEMEIN/0200_PRODUKTE/UNENTGELTLICHE_PRODUKTE_DES_BEV/Adresse-Relationale_Tabellen_Stichtagsdaten.zip"
     response = requests.get(addressdataUrl, stream=True)
     with open(addressdataUrl.split('/')[-1], 'wb') as handle, ProgressBar("downloading address data from BEV") as pb:
         for i, data in enumerate(response.iter_content(chunk_size=1000000)):
